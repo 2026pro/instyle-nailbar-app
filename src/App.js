@@ -182,8 +182,20 @@ const NAV={
 const MOBILE_PRIMARY={Owner:["dash","queue","pos","appts"],Manager:["staff","queue","schedule","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"]};
 // US formats: 12-hour time + MM/DD/YYYY dates
 const fmt12=t=>{if(!t)return t;const p=String(t).split(":");const h=Number(p[0]);if(isNaN(h)||p[1]===undefined)return t;return `${h%12||12}:${p[1]} ${h>=12?"PM":"AM"}`;};
-const fmtD=d=>{if(!d||!/^\d{4}-\d{2}-\d{2}/.test(String(d)))return d;const s=String(d);return `${s.slice(5,7)}/${s.slice(8,10)}/${s.slice(0,4)}`;};
-const fmtDT=s=>{if(!s)return s;const[d,t]=String(s).split(" ");return t?`${fmtD(d)} ${fmt12(t)}`:fmtD(s);};
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const isISO=d=>/^\d{4}-\d{2}-\d{2}/.test(String(d||""));
+const fmtMD=d=>{if(!isISO(d))return d;const s=String(d);return `${MON[Number(s.slice(5,7))-1]} ${Number(s.slice(8,10))}`;};
+const fmtY=d=>String(d).slice(0,4);
+const fmtD=d=>isISO(d)?`${fmtMD(d)}, ${fmtY(d)}`:d;
+function DateCell({d,t}){
+  if(!isISO(d))return <>{d||"—"}</>;
+  return(
+    <div style={{lineHeight:1.35,whiteSpace:"nowrap"}}>
+      <div>{fmtMD(d)}{t?<span> · {fmt12(t)}</span>:null}</div>
+      <div style={{fontSize:10,color:MUTED}}>{fmtY(d)}</div>
+    </div>
+  );
+}
 
 const card={background:"#fff",border:"0.5px solid rgba(212,175,55,0.18)",borderRadius:10,padding:"14px 18px",marginBottom:12};
 const inpS={width:"100%",padding:"8px 10px",border:"0.5px solid rgba(0,0,0,0.15)",borderRadius:7,fontSize:12,background:IVORY,color:DARK,outline:"none",fontFamily:"inherit",marginBottom:8};
@@ -506,7 +518,7 @@ function AuditPage(){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Time","Action","Action By","Employee Affected","Ticket","Station","Notes"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{AUDIT_LOG.map(a=>(
             <tr key={a.id} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"7px 8px",color:MUTED,fontSize:10,whiteSpace:"nowrap"}}>{fmtDT(a.time)}</td>
+              <td style={{padding:"7px 8px",color:MUTED,fontSize:10}}><DateCell d={String(a.time).split(" ")[0]} t={String(a.time).split(" ")[1]}/></td>
               <td style={{padding:"7px 8px"}}><span style={{...pill(a.action,actionColor[a.action]||MUTED,actionBg[a.action]||IVORY)}}>{a.action}</span></td>
               <td style={{padding:"7px 8px",fontWeight:500}}>{a.by}</td>
               <td style={{padding:"7px 8px",color:MUTED}}>{a.emp}</td>
@@ -701,7 +713,7 @@ function ClientsPage(){
               <td style={{padding:"8px",fontWeight:500}}>{c.n}</td>
               <td style={{padding:"8px"}}>{c.ph}</td>
               <td style={{padding:"8px",textAlign:"center"}}>{c.v}</td>
-              <td style={{padding:"8px",color:MUTED,fontSize:10}}>{c.lv?fmtD(c.lv):"—"}</td>
+              <td style={{padding:"8px",color:MUTED,fontSize:10}}>{c.lv?<DateCell d={c.lv}/>:"—"}</td>
               <td style={{padding:"8px",color:G,fontWeight:600}}>${c.b}</td>
               <td style={{padding:"8px"}}><Pill status={c.segment}/></td>
               <td style={{padding:"8px"}}><Pill status={c.st}/></td>
@@ -808,7 +820,7 @@ function ApptsPage(){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Date","Time","Client","Service","Staff","Duration","Source","Status"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{list.map((a,i)=>(
             <tr key={i} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"8px"}}>{fmtD(a.d)}</td>
+              <td style={{padding:"8px"}}><DateCell d={a.d}/></td>
               <td style={{padding:"8px",color:MUTED}}>{fmt12(a.t)}</td>
               <td style={{padding:"8px",fontWeight:500}}>{a.c}</td>
               <td style={{padding:"8px"}}>{a.s}</td>
@@ -973,7 +985,7 @@ function DashPage(){
               <td style={{padding:"7px",color:G,fontWeight:700}}>${t.tot}</td>
               <td style={{padding:"7px"}}>${t.tip}</td>
               <td style={{padding:"7px"}}>{t.pay}</td>
-              <td style={{padding:"7px",color:MUTED}}>{fmtD(t.d)}</td>
+              <td style={{padding:"7px",color:MUTED}}><DateCell d={t.d}/></td>
             </tr>
           ))}</tbody>
         </table>
@@ -1131,7 +1143,7 @@ function ReportsPage(){
               <td style={{padding:"7px",color:G,fontWeight:700}}>${t.tot}</td>
               <td style={{padding:"7px",color:"#A32D2D"}}>-${getSupplyCharge(t.sb).toFixed(2)}</td>
               <td style={{padding:"7px"}}>{t.pay}</td>
-              <td style={{padding:"7px",color:MUTED,fontSize:10}}>{fmtD(t.d)}</td>
+              <td style={{padding:"7px",color:MUTED,fontSize:10}}><DateCell d={t.d}/></td>
             </tr>
           ))}</tbody>
         </table>
@@ -1324,7 +1336,7 @@ function MySched({user}){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Date","Time","Client","Service","Duration","Status"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{myA.length?myA.map(a=>(
             <tr key={a.id} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"8px"}}>{fmtD(a.d)}</td>
+              <td style={{padding:"8px"}}><DateCell d={a.d}/></td>
               <td style={{padding:"8px",color:MUTED}}>{fmt12(a.t)}</td>
               <td style={{padding:"8px",fontWeight:500}}>{a.c}</td>
               <td style={{padding:"8px"}}>{a.s}</td>
