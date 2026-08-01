@@ -180,6 +180,10 @@ const NAV={
   Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
 };
 const MOBILE_PRIMARY={Owner:["dash","queue","pos","appts"],Manager:["staff","queue","schedule","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"]};
+// US formats: 12-hour time + MM/DD/YYYY dates
+const fmt12=t=>{if(!t)return t;const p=String(t).split(":");const h=Number(p[0]);if(isNaN(h)||p[1]===undefined)return t;return `${h%12||12}:${p[1]} ${h>=12?"PM":"AM"}`;};
+const fmtD=d=>{if(!d||!/^\d{4}-\d{2}-\d{2}/.test(String(d)))return d;const s=String(d);return `${s.slice(5,7)}/${s.slice(8,10)}/${s.slice(0,4)}`;};
+const fmtDT=s=>{if(!s)return s;const[d,t]=String(s).split(" ");return t?`${fmtD(d)} ${fmt12(t)}`:fmtD(s);};
 
 const card={background:"#fff",border:"0.5px solid rgba(212,175,55,0.18)",borderRadius:10,padding:"14px 18px",marginBottom:12};
 const inpS={width:"100%",padding:"8px 10px",border:"0.5px solid rgba(0,0,0,0.15)",borderRadius:7,fontSize:12,background:IVORY,color:DARK,outline:"none",fontFamily:"inherit",marginBottom:8};
@@ -207,7 +211,7 @@ const SP={
 // ─── SHARED COMPONENTS ────────────────────────────────────────
 function Av({name,size=32}){
   const ini=(name||"").split(" ").map(w=>w[0]||"").join("").slice(0,2).toUpperCase();
-  return <div style={{width:size,height:size,borderRadius:"50%",background:"rgba(212,175,55,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.35,fontWeight:700,color:BRONZE,flexShrink:0}}>{ini}</div>;
+  return <div className="os-av" style={{width:size,height:size,borderRadius:"50%",background:"rgba(212,175,55,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.35,fontWeight:700,color:BRONZE,flexShrink:0}}>{ini}</div>;
 }
 
 function Pill({status}){
@@ -502,7 +506,7 @@ function AuditPage(){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Time","Action","Action By","Employee Affected","Ticket","Station","Notes"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{AUDIT_LOG.map(a=>(
             <tr key={a.id} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"7px 8px",color:MUTED,fontSize:10}}>{a.time}</td>
+              <td style={{padding:"7px 8px",color:MUTED,fontSize:10,whiteSpace:"nowrap"}}>{fmtDT(a.time)}</td>
               <td style={{padding:"7px 8px"}}><span style={{...pill(a.action,actionColor[a.action]||MUTED,actionBg[a.action]||IVORY)}}>{a.action}</span></td>
               <td style={{padding:"7px 8px",fontWeight:500}}>{a.by}</td>
               <td style={{padding:"7px 8px",color:MUTED}}>{a.emp}</td>
@@ -670,7 +674,7 @@ function ClientsPage(){
             <button style={{...btnO,fontSize:11}} onClick={()=>setSel(null)}>Close</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:12}}>
-            {[{l:"Total Visits",v:sel.v},{l:"Balance",v:`$${sel.b}`},{l:"Segment",v:<Pill status={sel.segment}/>},{l:"Last Visit",v:sel.lv||"—"}].map((s,i)=>(
+            {[{l:"Total Visits",v:sel.v},{l:"Balance",v:`$${sel.b}`},{l:"Segment",v:<Pill status={sel.segment}/>},{l:"Last Visit",v:sel.lv?fmtD(sel.lv):"—"}].map((s,i)=>(
               <div key={i} style={{background:IVORY,borderRadius:7,padding:"10px 12px"}}>
                 <div style={{fontSize:10,color:MUTED}}>{s.l}</div>
                 <div style={{fontSize:14,fontWeight:400,color:DARK,marginTop:3}}>{s.v}</div>
@@ -697,7 +701,7 @@ function ClientsPage(){
               <td style={{padding:"8px",fontWeight:500}}>{c.n}</td>
               <td style={{padding:"8px"}}>{c.ph}</td>
               <td style={{padding:"8px",textAlign:"center"}}>{c.v}</td>
-              <td style={{padding:"8px",color:MUTED,fontSize:10}}>{c.lv||"—"}</td>
+              <td style={{padding:"8px",color:MUTED,fontSize:10}}>{c.lv?fmtD(c.lv):"—"}</td>
               <td style={{padding:"8px",color:G,fontWeight:600}}>${c.b}</td>
               <td style={{padding:"8px"}}><Pill status={c.segment}/></td>
               <td style={{padding:"8px"}}><Pill status={c.st}/></td>
@@ -733,7 +737,7 @@ function ApptsPage(){
   const addAppt=()=>{
     if(!form.c||!form.e||!form.s){setConflict("Please fill all fields.");return;}
     const cf=checkConflict(form.e,form.d,form.t,form.dur);
-    if(cf){setConflict(`Conflict! ${form.e} has ${cf.s} at ${cf.t} (±${BUFFER}min buffer). Choose different time or technician.`);return;}
+    if(cf){setConflict(`Conflict! ${form.e} has ${cf.s} at ${fmt12(cf.t)} (±${BUFFER}min buffer). Choose different time or technician.`);return;}
     setAppts(prev=>[...prev,{id:Date.now(),...form,st:"confirmed"}]);
     setShowForm(false);setConflict(null);setForm({c:"",e:"",s:"",d:"2026-05-31",t:"09:00",dur:60,src:"walk-in"});
   };
@@ -782,7 +786,7 @@ function ApptsPage(){
             <div>
               <label style={{fontSize:10,color:MUTED,display:"block",marginBottom:3}}>Time (15-min intervals)</label>
               <select style={inpS} value={form.t} onChange={e=>setForm(f=>({...f,t:e.target.value}))}>
-                {times.map(t=><option key={t} value={t}>{t}</option>)}
+                {times.map(t=><option key={t} value={t}>{fmt12(t)}</option>)}
               </select>
             </div>
             <div>
@@ -804,8 +808,8 @@ function ApptsPage(){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Date","Time","Client","Service","Staff","Duration","Source","Status"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{list.map((a,i)=>(
             <tr key={i} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"8px"}}>{a.d}</td>
-              <td style={{padding:"8px",color:MUTED}}>{a.t}</td>
+              <td style={{padding:"8px"}}>{fmtD(a.d)}</td>
+              <td style={{padding:"8px",color:MUTED}}>{fmt12(a.t)}</td>
               <td style={{padding:"8px",fontWeight:500}}>{a.c}</td>
               <td style={{padding:"8px"}}>{a.s}</td>
               <td style={{padding:"8px",color:MUTED}}>{a.e}</td>
@@ -951,7 +955,7 @@ function DashPage(){
           <Sec t="TODAY'S APPOINTMENTS"/>
           {ta.map(a=>(
             <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <div><div style={{fontSize:11,fontWeight:500}}>{a.c}</div><div style={{fontSize:10,color:MUTED}}>{a.s} · {a.e} · {a.t}</div></div>
+              <div><div style={{fontSize:11,fontWeight:500}}>{a.c}</div><div style={{fontSize:10,color:MUTED}}>{a.s} · {a.e} · {fmt12(a.t)}</div></div>
               <Pill status={a.st}/>
             </div>
           ))}
@@ -969,7 +973,7 @@ function DashPage(){
               <td style={{padding:"7px",color:G,fontWeight:700}}>${t.tot}</td>
               <td style={{padding:"7px"}}>${t.tip}</td>
               <td style={{padding:"7px"}}>{t.pay}</td>
-              <td style={{padding:"7px",color:MUTED}}>{t.d}</td>
+              <td style={{padding:"7px",color:MUTED}}>{fmtD(t.d)}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -1127,7 +1131,7 @@ function ReportsPage(){
               <td style={{padding:"7px",color:G,fontWeight:700}}>${t.tot}</td>
               <td style={{padding:"7px",color:"#A32D2D"}}>-${getSupplyCharge(t.sb).toFixed(2)}</td>
               <td style={{padding:"7px"}}>{t.pay}</td>
-              <td style={{padding:"7px",color:MUTED,fontSize:10}}>{t.d}</td>
+              <td style={{padding:"7px",color:MUTED,fontSize:10}}>{fmtD(t.d)}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -1161,7 +1165,7 @@ function FeedbackPage(){
               </div>
             </div>
             <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:10}}>
-              <span style={{fontSize:10,color:MUTED}}>{f.d}</span>
+              <span style={{fontSize:10,color:MUTED}}>{fmtD(f.d)}</span>
               <Pill status={f.st}/>
             </div>
           </div>
@@ -1194,7 +1198,7 @@ function StaffOverviewPage(){
             <div style={{fontSize:10,color:MUTED,marginBottom:5}}>TODAY'S APPOINTMENTS</div>
             {APPTS.filter(a=>a.e===sel.nick&&a.d==="2026-05-31").map(a=>(
               <div key={a.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"5px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-                <span>{a.t} · <strong>{a.c}</strong> · {a.s}</span>
+                <span>{fmt12(a.t)} · <strong>{a.c}</strong> · {a.s}</span>
                 <Pill status={a.st}/>
               </div>
             ))}
@@ -1277,7 +1281,7 @@ function MyDash({user}){
           <Sec t="TODAY'S APPOINTMENTS"/>
           {myA.length?myA.map(a=>(
             <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <div><div style={{fontSize:11,fontWeight:500}}>{a.c}</div><div style={{fontSize:10,color:MUTED}}>{a.s} · {a.t} · {a.dur}min</div></div>
+              <div><div style={{fontSize:11,fontWeight:500}}>{a.c}</div><div style={{fontSize:10,color:MUTED}}>{a.s} · {fmt12(a.t)} · {a.dur}min</div></div>
               <Pill status={a.st}/>
             </div>
           )):<p style={{color:MUTED,fontSize:11}}>No appointments today</p>}
@@ -1320,8 +1324,8 @@ function MySched({user}){
           <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Date","Time","Client","Service","Duration","Status"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
           <tbody>{myA.length?myA.map(a=>(
             <tr key={a.id} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-              <td style={{padding:"8px"}}>{a.d}</td>
-              <td style={{padding:"8px",color:MUTED}}>{a.t}</td>
+              <td style={{padding:"8px"}}>{fmtD(a.d)}</td>
+              <td style={{padding:"8px",color:MUTED}}>{fmt12(a.t)}</td>
               <td style={{padding:"8px",fontWeight:500}}>{a.c}</td>
               <td style={{padding:"8px"}}>{a.s}</td>
               <td style={{padding:"8px",color:MUTED}}>{a.dur}min</td>
@@ -1375,7 +1379,7 @@ function MyFb({user}){
           {f.r>0&&<div style={{color:G,fontSize:12,marginBottom:4}}>{"★".repeat(f.r)}{"☆".repeat(5-f.r)}</div>}
           <div style={{fontSize:11,fontWeight:500,marginBottom:3}}>From: {f.fr}</div>
           <div style={{fontSize:11,color:DARK,lineHeight:1.5}}>{f.msg}</div>
-          <div style={{fontSize:10,color:MUTED,marginTop:5}}>{f.d} · <Pill status={f.st}/></div>
+          <div style={{fontSize:10,color:MUTED,marginTop:5}}>{fmtD(f.d)} · <Pill status={f.st}/></div>
         </div>
       ))}
     </div>
@@ -1443,7 +1447,7 @@ function MyImp({user}){
           {mine.map(f=>(
             <div key={f.id} style={{padding:"8px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}><span>{f.msg}</span><Pill status={f.st}/></div>
-              <div style={{fontSize:10,color:MUTED,marginTop:3}}>{f.d}</div>
+              <div style={{fontSize:10,color:MUTED,marginTop:3}}>{fmtD(f.d)}</div>
             </div>
           ))}
         </div>
