@@ -1,1 +1,44 @@
-<div id="root"></div>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1A1814" />
+    <meta name="description" content="InStyle Beauty Lounge OS — salon management system" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="InStyle OS" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <title>InStyle OS — Beauty Lounge</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: #1A1814; -webkit-text-size-adjust: 100%; }
+      #root { min-height: 100vh; }
+      .os-bottomnav { display: none; }
+      button { touch-action: manipulation; }
+      @media (max-width: 820px) {
+        .os-sidebar { display: none !important; }
+        .os-main { margin-left: 0 !important; }
+        .os-content { padding: 14px 12px calc(86px + env(safe-area-inset-bottom)) !important; max-width: 100% !important; }
+        .os-topbar { padding: 8px 12px !important; }
+        .os-email { display: none !important; }
+        .os-bottomnav { display: flex !important; }
+        table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      }
+      @media (max-width: 640px) {
+        div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+        div[style*="grid-template-columns: 1fr 1fr 1fr"] { grid-template-columns: 1fr 1fr !important; }
+        div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr 1fr !important; }
+        div[style*="grid-template-columns: repeat(4"] { grid-template-columns: 1fr 1fr !important; }
+        div[style*="grid-template-columns: 1fr 300px"] { grid-template-columns: 1fr !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
