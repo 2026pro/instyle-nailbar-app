@@ -20,6 +20,7 @@ const USERS=[
   {id:10,email:"heidi@instylebl.com", phone:"+15713388781",pw:"heidi2026",  nick:"Heidi",  role:"Employee",fn:"Heidi N",          title:"Nail Tech",sch:["Wed","Thu","Fri","Sat","Sun"],         sales:195,tips:38,  queue_pos:8},
   {id:11,email:"jenny@instylebl.com", phone:"+15712251811",pw:"jenny2026",  nick:"Jenny",  role:"Employee",fn:"Jenny T",          title:"Nail Tech",sch:["Mon","Tue","Wed","Thu","Fri"],          sales:512,tips:102, queue_pos:9},
   {id:12,email:"luna@instylebl.com",  phone:"+15714782874",pw:"luna2026",   nick:"Luna",   role:"Employee",fn:"Luna .",           title:"Nail Tech",sch:["Tue","Thu","Fri","Sat"],               sales:360,tips:70,  queue_pos:10},
+  {id:13,email:"frontdesk@instylebl.com",phone:"+15719924006",pw:"desk2026",  nick:"Desk",   role:"FrontDesk",fn:"Front Desk",       title:"Front Desk",sch:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],sales:0,tips:0,queue_pos:null},
 ];
 
 const CLIENTS=[
@@ -175,11 +176,13 @@ const db={
 
 // ─── STYLE TOKENS ─────────────────────────────────────────────
 const NAV={
-  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
-  Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"audit",l:"Audit Log",s:"Audit"}],
+  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
+  Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"audit",l:"Audit Log",s:"Audit"}],
   Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
+
+  FrontDesk:[{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"appts",l:"Appointments",s:"Appts"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"pos",l:"POS Checkout",s:"POS"}],
 };
-const MOBILE_PRIMARY={Owner:["dash","queue","pos","appts"],Manager:["staff","queue","schedule","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"]};
+const MOBILE_PRIMARY={Owner:["dash","frontdesk","pos","queue"],Manager:["staff","frontdesk","queue","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"],FrontDesk:["frontdesk","appts","queue","pos"]};
 // US formats: 12-hour time + MM/DD/YYYY dates
 const fmt12=t=>{if(!t)return t;const p=String(t).split(":");const h=Number(p[0]);if(isNaN(h)||p[1]===undefined)return t;return `${h%12||12}:${p[1]} ${h>=12?"PM":"AM"}`;};
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -339,7 +342,8 @@ function Login({onLogin}){
           <strong style={{color:DARK}}>Demo accounts:</strong><br/>
           miga@instylebl.com / miga2026 (Owner)<br/>
           amanda@instylebl.com / amanda2026 (Manager)<br/>
-          jenny@instylebl.com / jenny2026 (Staff)
+          jenny@instylebl.com / jenny2026 (Staff)<br/>
+          frontdesk@instylebl.com / desk2026 (Front Desk)
         </div>
       </div>
     </div>
@@ -1468,6 +1472,240 @@ function MyImp({user}){
   );
 }
 
+
+// ─── FRONT DESK (tablet dashboard) ────────────────────────────
+let DESK_SEQ=100;
+let DESK_TICKETS=[];      // open tickets (module-level: survives page switches)
+let DESK_DONE=[];         // completed sales this session
+let DESK_CHECKED=[];      // appt ids already checked in
+
+const bigBtn={...btnP,padding:"14px 18px",fontSize:15,borderRadius:10};
+const bigBtnO={...btnO,padding:"13px 18px",fontSize:14,borderRadius:10};
+const nowHM=()=>{const n=new Date();return `${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;};
+
+function FrontDeskPage({user}){
+  const [,force]=useState(0);
+  const rerender=()=>force(x=>x+1);
+  const [prods,setProds]=useState([]);
+  const [walkName,setWalkName]=useState("");
+  const [walkSvcs,setWalkSvcs]=useState([]);
+  const [walkTech,setWalkTech]=useState("");
+  const [svcSearch,setSvcSearch]=useState("");
+  const [sel,setSel]=useState(null);          // selected open ticket id
+  const [tipPct,setTipPct]=useState(null);    // 18 | 20 | 25 | 0 | "custom"
+  const [tipCustom,setTipCustom]=useState("");
+  const [pay,setPay]=useState(null);          // "Cash" | "Card"
+  const [helcim,setHelcim]=useState(null);    // null | "sending" | "approved" | "unconfigured" | "failed"
+  const [okMsg,setOkMsg]=useState("");
+  const [reauth,setReauth]=useState(null);    // ticket id pending cancel
+  const [prodsLoaded,setProdsLoaded]=useState(false);
+
+  useEffect(()=>{ db.from("products").select("*").then(({data})=>{setProds(data||[]);setProdsLoaded(true);}); },[]);
+
+  const techs=USERS.filter(u=>u.role==="Employee"&&u.queue_pos!==null).sort((a,b)=>a.queue_pos-b.queue_pos);
+  const busy=DESK_TICKETS.map(t=>t.tech);
+  const freeTechs=techs.filter(t=>!busy.includes(t.nick));
+  const nextTech=freeTechs[0]||techs[0];
+  const priceOf=name=>{const p=prods.find(p=>(p.name||"").toLowerCase()===String(name).toLowerCase())||prods.find(p=>(p.name||"").toLowerCase().includes(String(name).toLowerCase()));return p?parseFloat(p.price||0):0;};
+
+  const toggleSvc=p=>setWalkSvcs(s=>s.find(x=>x.id===p.id)?s.filter(x=>x.id!==p.id):[...s,p]);
+
+  const startWalkIn=()=>{
+    if(!walkSvcs.length)return;
+    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:walkName.trim()||"Walk-in",tech:walkTech||(nextTech?nextTech.nick:""),items:walkSvcs.map(p=>({name:p.name,price:parseFloat(p.price||0)})),start:nowHM(),src:"walk-in"}];
+    setWalkName("");setWalkSvcs([]);setWalkTech("");
+    setOkMsg("Service started!");setTimeout(()=>setOkMsg(""),2500);
+    rerender();
+  };
+
+  const checkIn=a=>{
+    DESK_CHECKED=[...DESK_CHECKED,a.id];
+    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:a.c,tech:a.e,items:[{name:a.s,price:priceOf(a.s)}],start:nowHM(),src:"appointment"}];
+    rerender();
+  };
+
+  const ticket=DESK_TICKETS.find(t=>t.id===sel);
+  const sub=ticket?ticket.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0):0;
+  const supply=getSupplyCharge(sub);
+  const tipA=tipPct==="custom"?(parseFloat(tipCustom)||0):tipPct?sub*tipPct/100:0;
+  const total=sub+supply+tipA;
+
+  const addItem=p=>{if(!ticket)return;ticket.items=[...ticket.items,{name:p.name,price:parseFloat(p.price||0)}];rerender();};
+  const rmItem=i=>{if(!ticket)return;ticket.items=ticket.items.filter((_,x)=>x!==i);rerender();};
+  const resetPay=()=>{setTipPct(null);setTipCustom("");setPay(null);setHelcim(null);};
+  const selectTicket=id=>{setSel(id===sel?null:id);resetPay();};
+
+  const finalize=async(method)=>{
+    if(!ticket)return;
+    await db.from("transactions").insert({client_name:ticket.client,employee_name:ticket.tech,service:ticket.items.map(i=>i.name).join(", "),subtotal:sub.toFixed(2),tip_amount:tipA.toFixed(2),total_amount:total.toFixed(2),payment_method:method,created_at:new Date().toISOString()});
+    DESK_DONE=[...DESK_DONE,{client:ticket.client,tech:ticket.tech,total,tip:tipA,method,at:nowHM()}];
+    DESK_TICKETS=DESK_TICKETS.filter(t=>t.id!==ticket.id);
+    setSel(null);resetPay();
+    setOkMsg(`Payment received — $${total.toFixed(2)} (${method})`);setTimeout(()=>setOkMsg(""),3500);
+    rerender();
+  };
+
+  const chargeCard=async()=>{
+    setHelcim("sending");
+    try{
+      const r=await fetch("/api/terminal-purchase",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:total.toFixed(2)})});
+      const d=await r.json().catch(()=>null);
+      if(r.ok&&d&&d.ok===true){setHelcim("approved");await finalize("Card (Helcim)");}
+      else if(r.status===501||(d&&d.error==="not_configured")){setHelcim("unconfigured");}
+      else{setHelcim("failed");}
+    }catch(e){setHelcim("failed");}
+  };
+
+  const cancelTicket=id=>{DESK_TICKETS=DESK_TICKETS.filter(t=>t.id!==id);if(sel===id){setSel(null);resetPay();}rerender();};
+
+  const dayRevenue=DESK_DONE.reduce((s,d)=>s+d.total,0);
+  const dayTips=DESK_DONE.reduce((s,d)=>s+d.tip,0);
+  const pendingAppts=APPTS.filter(a=>!DESK_CHECKED.includes(a.id)&&(a.st==="confirmed"||a.st==="pending"));
+  const filteredProds=prods.filter(p=>!svcSearch||(p.name||"").toLowerCase().includes(svcSearch.toLowerCase()));
+
+  const kpi=(label,val,sub2)=>(
+    <div style={{...card,marginBottom:0,textAlign:"center",padding:"14px 10px"}}>
+      <div style={{fontSize:10,color:MUTED,letterSpacing:"0.08em",marginBottom:4}}>{label}</div>
+      <div style={{fontSize:22,fontWeight:700,color:DARK}}>{val}</div>
+      {sub2?<div style={{fontSize:10,color:MUTED,marginTop:2}}>{sub2}</div>:null}
+    </div>
+  );
+
+  return(
+    <div style={{position:"relative"}}>
+      {reauth!==null&&<ReAuthModal action="Cancel Ticket" onSuccess={()=>{cancelTicket(reauth);setReauth(null);}} onCancel={()=>setReauth(null)}/>}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <Ptitle t="Front Desk"/>
+        <span style={{fontSize:11,color:MUTED}}>Next available: <strong style={{color:G}}>{freeTechs.length?freeTechs[0].nick:"—"}</strong></span>
+      </div>
+      {okMsg&&<div style={{background:"#EAF3DE",border:"0.5px solid #3B6D11",borderRadius:8,padding:"12px 16px",marginBottom:12,color:"#27500A",fontWeight:600,fontSize:14}}>{okMsg}</div>}
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:9,marginBottom:14}}>
+        {kpi("REVENUE — TODAY",`$${dayRevenue.toFixed(2)}`,`${DESK_DONE.length} sales · $${dayTips.toFixed(2)} tips`)}
+        {kpi("IN SERVICE",DESK_TICKETS.length,"open tickets")}
+        {kpi("APPOINTMENTS",pendingAppts.length,"waiting check-in")}
+        {kpi("FREE TECHS",freeTechs.length,freeTechs.slice(0,3).map(t=>t.nick).join(", ")||"none")}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        {/* LEFT: walk-in + appointments */}
+        <div>
+          <div style={{...card,borderColor:"rgba(212,175,55,0.45)"}}>
+            <Sec t="WALK-IN — START SERVICE"/>
+            <input style={{...inpS,padding:"12px 14px",fontSize:14}} placeholder="Client name (optional)" value={walkName} onChange={e=>setWalkName(e.target.value)}/>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <select style={{...inpS,marginBottom:0,padding:"12px 10px",fontSize:14}} value={walkTech} onChange={e=>setWalkTech(e.target.value)}>
+                <option value="">Tech: {nextTech?`${nextTech.nick} (next in queue)`:"—"}</option>
+                {techs.map(t=><option key={t.id} value={t.nick}>{t.nick}{busy.includes(t.nick)?" — busy":""}</option>)}
+              </select>
+            </div>
+            <div style={{fontSize:10,color:MUTED,marginBottom:6}}>Tap services:</div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12,maxHeight:170,overflowY:"auto"}}>
+              {prods.map(p=>{
+                const on=!!walkSvcs.find(x=>x.id===p.id);
+                return <button key={p.id} onClick={()=>toggleSvc(p)} style={{padding:"10px 13px",borderRadius:20,border:`1px solid ${on?G:"rgba(0,0,0,0.15)"}`,background:on?"rgba(212,175,55,0.15)":"#fff",color:on?BRONZE:DARK,fontSize:13,fontWeight:on?600:400,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>;
+              })}
+              {prods.length===0&&<span style={{fontSize:11,color:MUTED}}>{prodsLoaded?"No services found — add them in Supabase → products table.":"Loading services…"}</span>}
+            </div>
+            <button style={{...bigBtn,width:"100%",opacity:walkSvcs.length?1:0.45}} disabled={!walkSvcs.length} onClick={startWalkIn}>
+              Start Service{walkSvcs.length?` — $${walkSvcs.reduce((s,p)=>s+parseFloat(p.price||0),0).toFixed(2)}`:""} →
+            </button>
+          </div>
+
+          <div style={card}>
+            <Sec t="TODAY'S APPOINTMENTS — CHECK IN"/>
+            {pendingAppts.length===0&&<p style={{color:MUTED,fontSize:12}}>No appointments waiting.</p>}
+            {pendingAppts.map(a=>(
+              <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"0.5px solid rgba(0,0,0,0.05)"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:500}}>{a.c}</div>
+                  <div style={{fontSize:11,color:MUTED}}>{a.s} · {a.e} · {fmt12(a.t)} <Pill status={a.st}/></div>
+                </div>
+                <button style={{...bigBtnO,padding:"10px 16px"}} onClick={()=>checkIn(a)}>Check In</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT: open tickets + checkout */}
+        <div>
+          <div style={card}>
+            <Sec t="IN SERVICE — TAP TO CHECK OUT"/>
+            {DESK_TICKETS.length===0&&<p style={{color:MUTED,fontSize:12}}>No open tickets. Start a walk-in or check in an appointment.</p>}
+            {DESK_TICKETS.map(t=>(
+              <div key={t.id} onClick={()=>selectTicket(t.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 12px",marginBottom:7,borderRadius:10,cursor:"pointer",border:`1.5px solid ${sel===t.id?G:"rgba(0,0,0,0.08)"}`,background:sel===t.id?"rgba(212,175,55,0.08)":"#fff"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600}}>{t.client}</div>
+                  <div style={{fontSize:11,color:MUTED}}>{t.items.map(i=>i.name).join(", ")} · {t.tech} · since {fmt12(t.start)}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:15,fontWeight:700,color:G}}>${t.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0).toFixed(2)}</div>
+                  <div style={{fontSize:10,color:MUTED}}>{t.src}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {ticket&&(
+            <div style={{...card,borderColor:G,borderWidth:1.5}}>
+              <Sec t={`CHECKOUT — ${ticket.client.toUpperCase()} (${ticket.tech})`}/>
+              {ticket.items.map((i,x)=>(
+                <div key={x} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"0.5px solid rgba(0,0,0,0.05)"}}>
+                  <span style={{fontSize:13}}>{i.name}</span>
+                  <span style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontWeight:600}}>${(parseFloat(i.price)||0).toFixed(2)}</span>
+                    <button onClick={()=>rmItem(x)} style={{background:"none",border:"none",color:"#A32D2D",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+                  </span>
+                </div>
+              ))}
+              <input style={{...inpS,marginTop:8}} placeholder="+ Add service…" value={svcSearch} onChange={e=>setSvcSearch(e.target.value)}/>
+              {svcSearch&&(
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                  {filteredProds.slice(0,6).map(p=><button key={p.id} onClick={()=>{addItem(p);setSvcSearch("");}} style={{padding:"8px 12px",borderRadius:16,border:"1px solid rgba(0,0,0,0.15)",background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>)}
+                </div>
+              )}
+              <div style={{fontSize:12,color:MUTED,display:"flex",justifyContent:"space-between",padding:"6px 0"}}><span>Subtotal</span><span>${sub.toFixed(2)}</span></div>
+              <div style={{fontSize:12,color:MUTED,display:"flex",justifyContent:"space-between",padding:"2px 0 8px"}}><span>Supply charge</span><span>${supply.toFixed(2)}</span></div>
+              <div style={{fontSize:11,color:MUTED,marginBottom:5}}>Tip:</div>
+              <div style={{display:"flex",gap:7,marginBottom:10,flexWrap:"wrap"}}>
+                {[18,20,25].map(p=>(
+                  <button key={p} onClick={()=>{setTipPct(p);setTipCustom("");}} style={{flex:1,minWidth:64,padding:"12px 6px",borderRadius:9,border:`1.5px solid ${tipPct===p?G:"rgba(0,0,0,0.13)"}`,background:tipPct===p?"rgba(212,175,55,0.14)":"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{p}%<div style={{fontSize:10,fontWeight:400,color:MUTED}}>${(sub*p/100).toFixed(2)}</div></button>
+                ))}
+                <button onClick={()=>setTipPct(0)} style={{flex:1,minWidth:56,padding:"12px 6px",borderRadius:9,border:`1.5px solid ${tipPct===0?G:"rgba(0,0,0,0.13)"}`,background:tipPct===0?"rgba(212,175,55,0.14)":"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>No tip</button>
+                <input style={{...inpS,marginBottom:0,width:90,padding:"10px"}} type="number" placeholder="Custom $" value={tipCustom} onChange={e=>{setTipCustom(e.target.value);setTipPct("custom");}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:"1px solid rgba(0,0,0,0.1)",marginBottom:10}}>
+                <span style={{fontSize:15,fontWeight:600}}>TOTAL</span>
+                <span style={{fontSize:24,fontWeight:800,color:G}}>${total.toFixed(2)}</span>
+              </div>
+              {helcim==="sending"&&<div style={{background:"#FAEEDA",border:"0.5px solid #854F0B",borderRadius:8,padding:"11px 14px",fontSize:13,color:"#854F0B",marginBottom:9,fontWeight:500}}>Sending ${total.toFixed(2)} to Helcim terminal… ask client to tap/insert card.</div>}
+              {helcim==="unconfigured"&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:8,padding:"11px 14px",fontSize:12,color:"#A32D2D",marginBottom:9}}>Helcim terminal not connected yet (API token missing). Take the card on the terminal manually, then record it: <button onClick={()=>finalize("Card")} style={{...btnP,padding:"7px 12px",marginLeft:6}}>Record Card Sale</button></div>}
+              {helcim==="failed"&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:8,padding:"11px 14px",fontSize:12,color:"#A32D2D",marginBottom:9}}>Terminal error / declined. Retry or record manually: <button onClick={()=>finalize("Card")} style={{...btnP,padding:"7px 12px",marginLeft:6}}>Record Card Sale</button></div>}
+              <div style={{display:"flex",gap:9}}>
+                <button style={{...bigBtn,flex:1.4,opacity:helcim==="sending"?0.5:1}} disabled={helcim==="sending"} onClick={chargeCard}>💳 Card — Terminal</button>
+                <button style={{...bigBtnO,flex:1}} onClick={()=>finalize("Cash")}>Cash</button>
+                <button style={{...btnD,padding:"13px 14px",borderRadius:10}} onClick={()=>setReauth(ticket.id)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {DESK_DONE.length>0&&(
+            <div style={card}>
+              <Sec t="COMPLETED TODAY"/>
+              {DESK_DONE.slice().reverse().map((d,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)",fontSize:12}}>
+                  <span>{d.client} <span style={{color:MUTED}}>· {d.tech} · {fmt12(d.at)} · {d.method}</span></span>
+                  <span style={{fontWeight:600,color:G}}>${d.total.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MOBILE BOTTOM NAV ────────────────────────────────────────
 function MobileNav({nav,page,setPage,user,onSignOut}){
   const [open,setOpen]=useState(false);
@@ -1514,17 +1752,18 @@ export default function App(){
 
   const handleLogin=u=>{
     setUser(u);
-    setPage(u.role==="Owner"?"dash":u.role==="Manager"?"staff":"my_dash");
+    setPage(u.role==="Owner"?"dash":u.role==="Manager"?"staff":u.role==="FrontDesk"?"frontdesk":"my_dash");
   };
 
   if(!user) return <Login onLogin={handleLogin}/>;
 
   const nav=NAV[user.role]||[];
-  const rp=user.role==="Owner"?"#3C3489":user.role==="Manager"?"#854F0B":"#3B6D11";
-  const rb=user.role==="Owner"?"#EEEDFE":user.role==="Manager"?"#FAEEDA":"#EAF3DE";
+  const rp=user.role==="Owner"?"#3C3489":user.role==="Manager"?"#854F0B":user.role==="FrontDesk"?"#0E6E6E":"#3B6D11";
+  const rb=user.role==="Owner"?"#EEEDFE":user.role==="Manager"?"#FAEEDA":user.role==="FrontDesk"?"#DFF3F3":"#EAF3DE";
 
   const PAGES={
     dash:       <DashPage/>,
+    frontdesk:  <FrontDeskPage user={user}/>,
     revenue:    <RevenuePage/>,
     schedule:   <SchedulePage/>,
     employees:  <EmployeesPage/>,
