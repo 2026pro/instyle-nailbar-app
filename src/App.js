@@ -284,8 +284,9 @@ function ReAuthModal({action,onSuccess,onCancel}){
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────
 function Login({onLogin}){
+  const isDeskHost=typeof window!=="undefined"&&window.location.hostname.startsWith("desk.");
   const [tab,setTab]=useState("email");
-  const [email,setEmail]=useState("");
+  const [email,setEmail]=useState(isDeskHost?"frontdesk@instylebl.com":"");
   const [phone,setPhone]=useState("");
   const [pw,setPw]=useState("");
   const [err,setErr]=useState("");
