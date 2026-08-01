@@ -175,10 +175,11 @@ const db={
 
 // ─── STYLE TOKENS ─────────────────────────────────────────────
 const NAV={
-  Owner:   [{id:"dash",l:"Dashboard"},{id:"queue",l:"Employee Queue"},{id:"revenue",l:"Revenue"},{id:"schedule",l:"All Schedules"},{id:"employees",l:"Employees"},{id:"clients",l:"Clients"},{id:"appts",l:"Appointments"},{id:"pos",l:"POS Checkout"},{id:"payroll",l:"Payroll"},{id:"reports",l:"Reports"},{id:"feedback",l:"Feedback"},{id:"audit",l:"Audit Log"},{id:"safety",l:"Safety / SDS"},{id:"giftcards",l:"Gift Cards"}],
-  Manager: [{id:"staff",l:"Staff Overview"},{id:"queue",l:"Employee Queue"},{id:"schedule",l:"Schedules"},{id:"appts",l:"Appointments"},{id:"feedback",l:"Feedback"},{id:"leave",l:"Leave Requests"},{id:"reports",l:"Reports"},{id:"audit",l:"Audit Log"}],
-  Employee:[{id:"my_dash",l:"My Dashboard"},{id:"my_sched",l:"My Schedule"},{id:"my_queue",l:"My Queue Position"},{id:"my_fb",l:"My Feedback"},{id:"my_leave",l:"Request Leave"},{id:"my_imp",l:"Suggest Improvement"}],
+  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
+  Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"audit",l:"Audit Log",s:"Audit"}],
+  Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
 };
+const MOBILE_PRIMARY={Owner:["dash","queue","pos","appts"],Manager:["staff","queue","schedule","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"]};
 
 const card={background:"#fff",border:"0.5px solid rgba(212,175,55,0.18)",borderRadius:10,padding:"14px 18px",marginBottom:12};
 const inpS={width:"100%",padding:"8px 10px",border:"0.5px solid rgba(0,0,0,0.15)",borderRadius:7,fontSize:12,background:IVORY,color:DARK,outline:"none",fontFamily:"inherit",marginBottom:8};
@@ -247,8 +248,8 @@ function ReAuthModal({action,onSuccess,onCancel}){
     else setErr("Incorrect password. Manager or Owner required.");
   };
   return(
-    <div style={{position:"absolute",inset:0,background:"rgba(26,24,20,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,borderRadius:10}}>
-      <div style={{background:"#fff",borderRadius:12,padding:28,width:320}}>
+    <div style={{position:"absolute",inset:0,background:"rgba(26,24,20,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,borderRadius:10,padding:16}}>
+      <div style={{background:"#fff",borderRadius:12,padding:24,width:"min(320px, 100%)"}}>
         <div style={{fontSize:14,fontWeight:500,color:DARK,marginBottom:4}}>Authorization Required</div>
         <div style={{fontSize:12,color:MUTED,marginBottom:16}}>Action: <strong>{action}</strong> requires Manager or Owner login.</div>
         {err&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:7,padding:"8px 12px",fontSize:11,color:"#A32D2D",marginBottom:12}}>{err}</div>}
@@ -289,12 +290,12 @@ function Login({onLogin}){
   };
 
   return(
-    <div style={{minHeight:680,background:DARK,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:12,padding:24}}>
+    <div style={{minHeight:"100vh",background:DARK,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 16px"}}>
       <div style={{textAlign:"center",marginBottom:28}}>
         <div style={{fontSize:22,fontWeight:300,color:G,letterSpacing:"0.3em"}}>INSTYLE</div>
         <div style={{fontSize:9,color:"rgba(255,255,255,0.28)",letterSpacing:"0.18em",marginTop:5}}>BEAUTY LOUNGE OS</div>
       </div>
-      <div style={{background:"#fff",borderRadius:14,padding:"28px 32px",width:360}}>
+      <div style={{background:"#fff",borderRadius:14,padding:"28px 24px",width:"min(400px, 100%)"}}>
         <div style={{fontSize:14,fontWeight:500,color:DARK,marginBottom:3}}>Welcome back</div>
         <div style={{fontSize:11,color:MUTED,marginBottom:20}}>Sign in to your account</div>
         <div style={{display:"flex",background:IVORY,borderRadius:8,padding:3,marginBottom:16}}>
@@ -1451,6 +1452,45 @@ function MyImp({user}){
   );
 }
 
+// ─── MOBILE BOTTOM NAV ────────────────────────────────────────
+function MobileNav({nav,page,setPage,user,onSignOut}){
+  const [open,setOpen]=useState(false);
+  const prim=(MOBILE_PRIMARY[user.role]||[]).map(id=>nav.find(n=>n.id===id)).filter(Boolean);
+  const go=id=>{setPage(id);setOpen(false);window.scrollTo(0,0);};
+  const tabBtn=(key,label,active,onClick)=>(
+    <button key={key} onClick={onClick} style={{flex:1,background:"none",border:"none",padding:"10px 2px 8px",cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:0}}>
+      <span style={{width:5,height:5,borderRadius:"50%",background:active?G:"transparent",transition:"background 0.15s"}}/>
+      <span style={{fontSize:10,letterSpacing:"0.04em",fontWeight:active?600:400,color:active?G:"rgba(255,255,255,0.45)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{label}</span>
+    </button>
+  );
+  return(<>
+    {open&&(
+      <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,background:"rgba(26,24,20,0.55)",zIndex:60}}>
+        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",left:0,right:0,bottom:0,background:DARK,borderRadius:"16px 16px 0 0",padding:"14px 14px calc(78px + env(safe-area-inset-bottom))",maxHeight:"75vh",overflowY:"auto"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.2)",margin:"0 auto 10px"}}/>
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"4px 2px 12px"}}>
+            <Av name={user.nick} size={30}/>
+            <div>
+              <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.85)"}}>{user.nick}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>{user.role} · {user.email}</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {nav.map(n=>(
+              <button key={n.id} onClick={()=>go(n.id)} style={{textAlign:"left",padding:"12px",borderRadius:9,border:`0.5px solid ${page===n.id?"rgba(212,175,55,0.5)":"rgba(255,255,255,0.08)"}`,background:page===n.id?"rgba(212,175,55,0.12)":"rgba(255,255,255,0.03)",color:page===n.id?G:"rgba(255,255,255,0.75)",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{n.l}</button>
+            ))}
+          </div>
+          <button onClick={onSignOut} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:9,border:"0.5px solid rgba(240,149,149,0.35)",background:"transparent",color:"#F09595",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>← Sign Out</button>
+        </div>
+      </div>
+    )}
+    <nav className="os-bottomnav" style={{position:"fixed",left:0,right:0,bottom:0,zIndex:65,background:DARK,borderTop:"1px solid rgba(212,175,55,0.18)",paddingBottom:"env(safe-area-inset-bottom)"}}>
+      {prim.map(n=>tabBtn(n.id,n.s||n.l,page===n.id&&!open,()=>go(n.id)))}
+      {tabBtn("__more","More ≡",open,()=>setOpen(o=>!o))}
+    </nav>
+  </>);
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────
 export default function App(){
   const [user,setUser]=useState(null);
@@ -1494,7 +1534,7 @@ export default function App(){
 
   return(
     <div style={{display:"flex",minHeight:"100vh",background:IVORY,fontFamily:"'Helvetica Neue',Helvetica,Arial,sans-serif"}}>
-      <div style={{width:200,minWidth:200,background:DARK,display:"flex",flexDirection:"column",position:"fixed",top:0,bottom:0,left:0,overflowY:"auto"}}>
+      <div className="os-sidebar" style={{width:200,minWidth:200,background:DARK,display:"flex",flexDirection:"column",position:"fixed",top:0,bottom:0,left:0,overflowY:"auto"}}>
         <div style={{padding:"18px 16px 12px",borderBottom:"1px solid rgba(212,175,55,0.1)"}}>
           <div style={{fontSize:13,fontWeight:300,color:G,letterSpacing:"0.2em"}}>INSTYLE</div>
           <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.12em",marginTop:3}}>BEAUTY LOUNGE OS</div>
@@ -1517,21 +1557,22 @@ export default function App(){
           <button onClick={()=>setUser(null)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.25)",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>← Sign Out</button>
         </div>
       </div>
-      <div style={{marginLeft:200,flex:1,display:"flex",flexDirection:"column"}}>
-        <div style={{background:"#fff",borderBottom:"0.5px solid rgba(212,175,55,0.12)",padding:"9px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
-          <div>
+      <div className="os-main" style={{marginLeft:200,flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
+        <div className="os-topbar" style={{background:"#fff",borderBottom:"0.5px solid rgba(212,175,55,0.12)",padding:"9px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+          <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:500,color:DARK,letterSpacing:"0.05em"}}>INSTYLE NAIL BAR</div>
-            <div style={{fontSize:10,color:MUTED}}>980 Maine Ave SW, Washington DC · {user.fn}</div>
+            <div style={{fontSize:10,color:MUTED,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>980 Maine Ave SW, Washington DC · {user.fn}</div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <span style={{fontSize:10,color:MUTED}}>{user.email}</span>
+          <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+            <span className="os-email" style={{fontSize:10,color:MUTED}}>{user.email}</span>
             <Av name={user.nick} size={28}/>
           </div>
         </div>
-        <div style={{flex:1,padding:"24px 28px 60px",maxWidth:1100}}>
+        <div className="os-content" style={{flex:1,padding:"24px 28px 60px",maxWidth:1100}}>
           {PAGES[page]||<DashPage/>}
         </div>
       </div>
+      <MobileNav nav={nav} page={page} setPage={setPage} user={user} onSignOut={()=>setUser(null)}/>
     </div>
   );
 }
