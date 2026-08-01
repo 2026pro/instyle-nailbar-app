@@ -8,18 +8,18 @@ const G="#D4AF37",DARK="#1A1814",MUTED="#9A9080",IVORY="#F7F4EF",BRONZE="#6B523B
 
 // ─── SEED DATA ────────────────────────────────────────────────
 const USERS=[
-  {id:1,email:"miga@instyle.com",   phone:"+15714847341",pw:"miga2026",   nick:"Miga",   role:"Owner",   fn:"Miga Tugendhat",   title:"Owner",    sch:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],sales:0,  tips:0,   queue_pos:null},
-  {id:2,email:"amanda@instyle.com", phone:"+17037869810",pw:"amanda2026", nick:"Amanda", role:"Manager", fn:"Amanda B",         title:"Manager",  sch:["Mon","Tue","Wed","Thu","Fri","Sat"],      sales:0,  tips:0,   queue_pos:null},
-  {id:3,email:"alsu@instyle.com",   phone:"+15714571086",pw:"alsu2026",   nick:"Alsu",   role:"Employee",fn:"Alsu Baatar",      title:"Nail Tech",sch:["Mon","Tue","Wed","Thu","Fri"],            sales:480,tips:96,  queue_pos:1},
-  {id:4,email:"ari@instyle.com",    phone:"+15713522456",pw:"ari2026",    nick:"Ari",    role:"Employee",fn:"Ari -",            title:"Nail Tech",sch:["Tue","Wed","Thu","Fri","Sat"],            sales:310,tips:60,  queue_pos:2},
-  {id:5,email:"erica@instyle.com",  phone:"+15716573335",pw:"erica2026",  nick:"Erica",  role:"Employee",fn:"Baterdene Batkhuyag",title:"Nail Tech",sch:["Mon","Wed","Fri","Sat"],              sales:392,tips:72,  queue_pos:3},
-  {id:6,email:"carina@instyle.com", phone:"+13014377636",pw:"carina2026", nick:"Carina", role:"Employee",fn:"Carina Q",         title:"Nail Tech",sch:["Mon","Tue","Thu","Fri"],               sales:275,tips:50,  queue_pos:4},
-  {id:7,email:"donna@instyle.com",  phone:"+12025538445",pw:"donna2026",  nick:"Donna",  role:"Employee",fn:"Donna Doogii",     title:"Nail Tech",sch:["Tue","Wed","Thu","Sat"],               sales:340,tips:68,  queue_pos:5},
-  {id:8,email:"emy@instyle.com",    phone:"+16465873677",pw:"emy2026",    nick:"Emy",    role:"Employee",fn:"Emy -",            title:"Nail Tech",sch:["Mon","Fri","Sat","Sun"],               sales:220,tips:40,  queue_pos:6},
-  {id:9,email:"hanna@instyle.com",  phone:"+15712201753",pw:"hanna2026",  nick:"Hanna",  role:"Employee",fn:"Hanna H",          title:"Nail Tech",sch:["Mon","Tue","Wed","Thu"],               sales:418,tips:80,  queue_pos:7},
-  {id:10,email:"heidi@instyle.com", phone:"+15713388781",pw:"heidi2026",  nick:"Heidi",  role:"Employee",fn:"Heidi N",          title:"Nail Tech",sch:["Wed","Thu","Fri","Sat","Sun"],         sales:195,tips:38,  queue_pos:8},
-  {id:11,email:"jenny@instyle.com", phone:"+15712251811",pw:"jenny2026",  nick:"Jenny",  role:"Employee",fn:"Jenny T",          title:"Nail Tech",sch:["Mon","Tue","Wed","Thu","Fri"],          sales:512,tips:102, queue_pos:9},
-  {id:12,email:"luna@instyle.com",  phone:"+15714782874",pw:"luna2026",   nick:"Luna",   role:"Employee",fn:"Luna .",           title:"Nail Tech",sch:["Tue","Thu","Fri","Sat"],               sales:360,tips:70,  queue_pos:10},
+  {id:1,email:"miga@instylebl.com",   phone:"+15714847341",pw:"miga2026",   nick:"Miga",   role:"Owner",   fn:"Miga Tugendhat",   title:"Owner",    sch:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],sales:0,  tips:0,   queue_pos:null},
+  {id:2,email:"amanda@instylebl.com", phone:"+17037869810",pw:"amanda2026", nick:"Amanda", role:"Manager", fn:"Amanda B",         title:"Manager",  sch:["Mon","Tue","Wed","Thu","Fri","Sat"],      sales:0,  tips:0,   queue_pos:null},
+  {id:3,email:"alsu@instylebl.com",   phone:"+15714571086",pw:"alsu2026",   nick:"Alsu",   role:"Employee",fn:"Alsu Baatar",      title:"Nail Tech",sch:["Mon","Tue","Wed","Thu","Fri"],            sales:480,tips:96,  queue_pos:1},
+  {id:4,email:"ari@instylebl.com",    phone:"+15713522456",pw:"ari2026",    nick:"Ari",    role:"Employee",fn:"Ari -",            title:"Nail Tech",sch:["Tue","Wed","Thu","Fri","Sat"],            sales:310,tips:60,  queue_pos:2},
+  {id:5,email:"erica@instylebl.com",  phone:"+15716573335",pw:"erica2026",  nick:"Erica",  role:"Employee",fn:"Baterdene Batkhuyag",title:"Nail Tech",sch:["Mon","Wed","Fri","Sat"],              sales:392,tips:72,  queue_pos:3},
+  {id:6,email:"carina@instylebl.com", phone:"+13014377636",pw:"carina2026", nick:"Carina", role:"Employee",fn:"Carina Q",         title:"Nail Tech",sch:["Mon","Tue","Thu","Fri"],               sales:275,tips:50,  queue_pos:4},
+  {id:7,email:"donna@instylebl.com",  phone:"+12025538445",pw:"donna2026",  nick:"Donna",  role:"Employee",fn:"Donna Doogii",     title:"Nail Tech",sch:["Tue","Wed","Thu","Sat"],               sales:340,tips:68,  queue_pos:5},
+  {id:8,email:"emy@instylebl.com",    phone:"+16465873677",pw:"emy2026",    nick:"Emy",    role:"Employee",fn:"Emy -",            title:"Nail Tech",sch:["Mon","Fri","Sat","Sun"],               sales:220,tips:40,  queue_pos:6},
+  {id:9,email:"hanna@instylebl.com",  phone:"+15712201753",pw:"hanna2026",  nick:"Hanna",  role:"Employee",fn:"Hanna H",          title:"Nail Tech",sch:["Mon","Tue","Wed","Thu"],               sales:418,tips:80,  queue_pos:7},
+  {id:10,email:"heidi@instylebl.com", phone:"+15713388781",pw:"heidi2026",  nick:"Heidi",  role:"Employee",fn:"Heidi N",          title:"Nail Tech",sch:["Wed","Thu","Fri","Sat","Sun"],         sales:195,tips:38,  queue_pos:8},
+  {id:11,email:"jenny@instylebl.com", phone:"+15712251811",pw:"jenny2026",  nick:"Jenny",  role:"Employee",fn:"Jenny T",          title:"Nail Tech",sch:["Mon","Tue","Wed","Thu","Fri"],          sales:512,tips:102, queue_pos:9},
+  {id:12,email:"luna@instylebl.com",  phone:"+15714782874",pw:"luna2026",   nick:"Luna",   role:"Employee",fn:"Luna .",           title:"Nail Tech",sch:["Tue","Thu","Fri","Sat"],               sales:360,tips:70,  queue_pos:10},
 ];
 
 const CLIENTS=[
@@ -320,9 +320,9 @@ function Login({onLogin}){
         </div>
         <div style={{marginTop:16,padding:12,background:IVORY,borderRadius:8,fontSize:10,color:MUTED}}>
           <strong style={{color:DARK}}>Demo accounts:</strong><br/>
-          miga@instyle.com / miga2026 (Owner)<br/>
-          amanda@instyle.com / amanda2026 (Manager)<br/>
-          jenny@instyle.com / jenny2026 (Staff)
+          miga@instylebl.com / miga2026 (Owner)<br/>
+          amanda@instylebl.com / amanda2026 (Manager)<br/>
+          jenny@instylebl.com / jenny2026 (Staff)
         </div>
       </div>
     </div>
