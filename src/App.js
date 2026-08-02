@@ -165,6 +165,12 @@ const db={
       try{const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",Prefer:"return=representation"},body:JSON.stringify(body)});return{data:await r.json(),error:r.ok?null:"error"};}
       catch(e){return{data:null,error:e.message};}
     },
+    update:async(body,opts={})=>{
+      let url=`${SUPABASE_URL}/rest/v1/${table}`;
+      if(opts.eq) url+=`?${opts.eq[0]}=eq.${opts.eq[1]}`;
+      try{const r=await fetch(url,{method:"PATCH",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(body)});return{error:r.ok?null:"error"};}
+      catch(e){return{error:e.message};}
+    },
     delete:async(opts={})=>{
       let url=`${SUPABASE_URL}/rest/v1/${table}`;
       if(opts.eq) url+=`?${opts.eq[0]}=eq.${opts.eq[1]}`;
@@ -199,6 +205,13 @@ function DateCell({d,t}){
     </div>
   );
 }
+
+// Live Supabase helpers (shared backbone: website + staff app + OS)
+const qraw=async(path)=>{try{const r=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});const d=await r.json();return r.ok&&Array.isArray(d)?d:[];}catch(e){return[];}};
+const todayStr=()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;};
+const hmOf=ts=>{const d=new Date(ts);return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;};
+const dStrOf=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+const isTechRole=r=>/tech|artist|stylist/i.test(r||"");
 
 const card={background:"#fff",border:"0.5px solid rgba(212,175,55,0.18)",borderRadius:10,padding:"14px 18px",marginBottom:12};
 const inpS={width:"100%",padding:"8px 10px",border:"0.5px solid rgba(0,0,0,0.15)",borderRadius:7,fontSize:12,background:IVORY,color:DARK,outline:"none",fontFamily:"inherit",marginBottom:8};
@@ -732,12 +745,23 @@ function ClientsPage(){
 
 // ─── APPOINTMENTS PAGE (§6 with conflict check) ───────────────
 function ApptsPage(){
-  const [appts,setAppts]=useState(APPTS);
+  const [appts,setAppts]=useState([]);
+  const [emps,setEmps]=useState([]);
+  const [clis,setClis]=useState([]);
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({c:"",e:"",s:"",d:"2026-05-31",t:"09:00",dur:60,src:"walk-in"});
+  const [form,setForm]=useState({c:"",e:"",s:"",d:todayStr(),t:"09:00",dur:60,src:"walk-in"});
   const [conflict,setConflict]=useState(null);
   const [filterD,setFilterD]=useState("");
   const BUFFER=15; // minutes before/after
+
+  const load=useCallback(()=>{
+    qraw("appointments?select=id,service,scheduled_at,status,notes,clients(name),employees(name)&order=scheduled_at.desc&limit=120").then(rows=>{
+      setAppts(rows.map(a=>({id:a.id,c:(a.clients&&a.clients.name)||a.notes||"Client",e:(a.employees&&a.employees.name)||"",s:a.service,d:dStrOf(a.scheduled_at),t:hmOf(a.scheduled_at),dur:60,src:"booked",st:a.status==="scheduled"?"confirmed":a.status})));
+    });
+    qraw("employees?select=id,name,role&status=eq.active&order=name.asc").then(setEmps);
+    qraw("clients?select=id,name&order=name.asc&limit=200").then(setClis);
+  },[]);
+  useEffect(()=>{load();},[load]);
 
   const checkConflict=(empNick,date,time,dur)=>{
     const [h,m]=time.split(":").map(Number);
@@ -751,12 +775,17 @@ function ApptsPage(){
     });
   };
 
-  const addAppt=()=>{
+  const addAppt=async()=>{
     if(!form.c||!form.e||!form.s){setConflict("Please fill all fields.");return;}
     const cf=checkConflict(form.e,form.d,form.t,form.dur);
     if(cf){setConflict(`Conflict! ${form.e} has ${cf.s} at ${fmt12(cf.t)} (±${BUFFER}min buffer). Choose different time or technician.`);return;}
-    setAppts(prev=>[...prev,{id:Date.now(),...form,st:"confirmed"}]);
-    setShowForm(false);setConflict(null);setForm({c:"",e:"",s:"",d:"2026-05-31",t:"09:00",dur:60,src:"walk-in"});
+    const emp=emps.find(x=>x.name===form.e);
+    const cli=clis.find(x=>x.name===form.c);
+    const iso=new Date(`${form.d}T${form.t}:00`).toISOString();
+    const {error}=await db.from("appointments").insert({service:form.s,scheduled_at:iso,status:"scheduled",employee_id:emp?emp.id:null,client_id:cli?cli.id:null,notes:cli?null:form.c});
+    if(error){setConflict("Could not save appointment — check connection.");return;}
+    setShowForm(false);setConflict(null);setForm({c:"",e:"",s:"",d:todayStr(),t:"09:00",dur:60,src:"walk-in"});
+    load();
   };
 
   const list=filterD?appts.filter(a=>a.d===filterD):appts;
@@ -778,16 +807,14 @@ function ApptsPage(){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <div>
               <label style={{fontSize:10,color:MUTED,display:"block",marginBottom:3}}>Client</label>
-              <select style={inpS} value={form.c} onChange={e=>setForm(f=>({...f,c:e.target.value}))}>
-                <option value="">Select client</option>
-                {CLIENTS.map(c=><option key={c.id} value={c.n}>{c.n}</option>)}
-              </select>
+              <input style={inpS} list="os-clients" placeholder="Client name" value={form.c} onChange={e=>setForm(f=>({...f,c:e.target.value}))}/>
+              <datalist id="os-clients">{clis.map(c=><option key={c.id} value={c.name}/>)}</datalist>
             </div>
             <div>
               <label style={{fontSize:10,color:MUTED,display:"block",marginBottom:3}}>Technician</label>
               <select style={inpS} value={form.e} onChange={e=>setForm(f=>({...f,e:e.target.value}))}>
                 <option value="">Select tech</option>
-                {USERS.filter(u=>u.title==="Nail Tech").map(u=><option key={u.id} value={u.nick}>{u.nick}</option>)}
+                {emps.filter(u=>isTechRole(u.role)).map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
               </select>
             </div>
             <div>
@@ -844,6 +871,7 @@ function ApptsPage(){
 // ─── POS PAGE ─────────────────────────────────────────────────
 function POSPage({user}){
   const [prods,setProds]=useState([]);
+  const [emps,setEmps]=useState([]);
   const [cart,setCart]=useState([]);
   const [client,setClient]=useState("");
   const [emp,setEmp]=useState(user.title==="Nail Tech"?user.nick:"");
@@ -853,7 +881,7 @@ function POSPage({user}){
   const [search,setSearch]=useState("");
   const [reauth,setReauth]=useState(false);
 
-  useEffect(()=>{ db.from("products").select("*").then(({data})=>setProds(data||[])); },[]);
+  useEffect(()=>{ db.from("products").select("*").then(({data})=>setProds(data||[])); qraw("employees?select=id,name,role&status=eq.active&order=name.asc").then(setEmps); },[]);
 
   const addToCart=p=>{const ex=cart.find(i=>i.id===p.id);ex?setCart(cart.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i)):setCart([...cart,{...p,qty:1}]);};
   const sub=cart.reduce((s,i)=>s+parseFloat(i.price||0)*i.qty,0);
@@ -863,7 +891,9 @@ function POSPage({user}){
 
   const checkout=async()=>{
     if(!cart.length) return;
-    await db.from("transactions").insert({client_name:client||"Walk-in",employee_name:emp,service:cart.map(i=>i.name).join(", "),subtotal:sub.toFixed(2),tip_amount:tipA.toFixed(2),total_amount:(sub+tipA).toFixed(2),payment_method:pay,created_at:new Date().toISOString()});
+    const empRow=emps.find(x=>x.name===emp);
+    await db.from("transactions").insert({employee_id:empRow?empRow.id:null,total:(sub+tipA).toFixed(2),payment_method:pay});
+    if(empRow) await db.from("earnings").insert({employee_id:empRow.id,earned_date:todayStr(),service_name:cart.map(i=>i.name).join(", "),amount:sub.toFixed(2),tip:tipA.toFixed(2),source:"pos"});
     setCart([]);setTip("");setOk(true);setTimeout(()=>setOk(false),3000);
   };
 
@@ -881,9 +911,9 @@ function POSPage({user}){
               <option value="">Walk-in / Select Client</option>
               {CLIENTS.map(c=><option key={c.id} value={c.n}>{c.n}</option>)}
             </select>
-            <select style={inpS} value={emp} onChange={e=>setEmp(e.target.value)} disabled={user.title==="Nail Tech"}>
+            <select style={inpS} value={emp} onChange={e=>setEmp(e.target.value)}>
               <option value="">Select Staff</option>
-              {USERS.filter(u=>u.title==="Nail Tech").map(u=><option key={u.id} value={u.nick}>{u.nick}</option>)}
+              {emps.filter(u=>isTechRole(u.role)).map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
             </select>
           </div>
           <input style={inpS} placeholder="Search service..." value={search} onChange={e=>setSearch(e.target.value)}/>
@@ -1474,11 +1504,11 @@ function MyImp({user}){
 }
 
 
-// ─── FRONT DESK (tablet dashboard) ────────────────────────────
+// ─── FRONT DESK (tablet dashboard, live data) ─────────────────
 let DESK_SEQ=100;
 let DESK_TICKETS=[];      // open tickets (module-level: survives page switches)
 let DESK_DONE=[];         // completed sales this session
-let DESK_CHECKED=[];      // appt ids already checked in
+let DESK_CHECKED=[];      // appt/booking ids already checked in
 
 const bigBtn={...btnP,padding:"14px 18px",fontSize:15,borderRadius:10};
 const bigBtnO={...btnO,padding:"13px 18px",fontSize:14,borderRadius:10};
@@ -1488,40 +1518,65 @@ function FrontDeskPage({user}){
   const [,force]=useState(0);
   const rerender=()=>force(x=>x+1);
   const [prods,setProds]=useState([]);
+  const [prodsLoaded,setProdsLoaded]=useState(false);
+  const [emps,setEmps]=useState([]);
+  const [liveAppts,setLiveAppts]=useState([]);
+  const [bookings,setBookings]=useState([]);
+  const [clocked,setClocked]=useState([]);
+  const [dayEarn,setDayEarn]=useState(null);
   const [walkName,setWalkName]=useState("");
   const [walkSvcs,setWalkSvcs]=useState([]);
   const [walkTech,setWalkTech]=useState("");
   const [svcSearch,setSvcSearch]=useState("");
-  const [sel,setSel]=useState(null);          // selected open ticket id
-  const [tipPct,setTipPct]=useState(null);    // 18 | 20 | 25 | 0 | "custom"
+  const [sel,setSel]=useState(null);
+  const [tipPct,setTipPct]=useState(null);
   const [tipCustom,setTipCustom]=useState("");
-  const [pay,setPay]=useState(null);          // "Cash" | "Card"
-  const [helcim,setHelcim]=useState(null);    // null | "sending" | "approved" | "unconfigured" | "failed"
+  const [helcim,setHelcim]=useState(null);
   const [okMsg,setOkMsg]=useState("");
-  const [reauth,setReauth]=useState(null);    // ticket id pending cancel
-  const [prodsLoaded,setProdsLoaded]=useState(false);
+  const [reauth,setReauth]=useState(null);
 
-  useEffect(()=>{ db.from("products").select("*").then(({data})=>{setProds(data||[]);setProdsLoaded(true);}); },[]);
+  const loadAll=useCallback(()=>{
+    db.from("products").select("*").then(({data})=>{setProds((data||[]).filter(p=>p.active!==false&&(!p.type||/service/i.test(p.type))));setProdsLoaded(true);});
+    qraw("employees?select=id,name,role,status&status=eq.active&order=name.asc").then(setEmps);
+    qraw("appointments?select=id,service,scheduled_at,status,notes,clients(name),employees(id,name)&status=in.(scheduled,confirmed,pending)&order=scheduled_at.asc&limit=100").then(setLiveAppts);
+    qraw("booking_requests?select=*&status=eq.pending&order=created_at.desc&limit=25").then(setBookings);
+    qraw(`timeclock?select=employee_name,clock_out&date=eq.${todayStr()}`).then(setClocked);
+    qraw(`earnings?select=amount,tip&earned_date=eq.${todayStr()}`).then(rows=>setDayEarn({amt:rows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0),tip:rows.reduce((s,r)=>s+(parseFloat(r.tip)||0),0),count:rows.length}));
+  },[]);
+  useEffect(()=>{loadAll();const iv=setInterval(loadAll,60000);return()=>clearInterval(iv);},[loadAll]);
 
-  const techs=USERS.filter(u=>u.role==="Employee"&&u.queue_pos!==null).sort((a,b)=>a.queue_pos-b.queue_pos);
+  const techs=emps.filter(e=>isTechRole(e.role));
+  const clockedIn=clocked.filter(c=>!c.clock_out).map(c=>c.employee_name);
   const busy=DESK_TICKETS.map(t=>t.tech);
-  const freeTechs=techs.filter(t=>!busy.includes(t.nick));
+  const avail=clockedIn.length?techs.filter(t=>clockedIn.includes(t.name)):techs;
+  const freeTechs=avail.filter(t=>!busy.includes(t.name));
   const nextTech=freeTechs[0]||techs[0];
-  const priceOf=name=>{const p=prods.find(p=>(p.name||"").toLowerCase()===String(name).toLowerCase())||prods.find(p=>(p.name||"").toLowerCase().includes(String(name).toLowerCase()));return p?parseFloat(p.price||0):0;};
+  const empIdByName=n=>{if(!n)return null;const e=emps.find(e=>e.name===n)||emps.find(e=>(e.name||"").toLowerCase().startsWith(String(n).toLowerCase()));return e?e.id:null;};
+  const priceOf=name=>{const p=prods.find(p=>(p.name||"").toLowerCase()===String(name||"").toLowerCase())||prods.find(p=>(p.name||"").toLowerCase().includes(String(name||"").toLowerCase()));return p?parseFloat(p.price||0):0;};
 
   const toggleSvc=p=>setWalkSvcs(s=>s.find(x=>x.id===p.id)?s.filter(x=>x.id!==p.id):[...s,p]);
 
   const startWalkIn=()=>{
     if(!walkSvcs.length)return;
-    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:walkName.trim()||"Walk-in",tech:walkTech||(nextTech?nextTech.nick:""),items:walkSvcs.map(p=>({name:p.name,price:parseFloat(p.price||0)})),start:nowHM(),src:"walk-in"}];
+    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:walkName.trim()||"Walk-in",tech:walkTech||(nextTech?nextTech.name:""),items:walkSvcs.map(p=>({name:p.name,price:parseFloat(p.price||0)})),start:nowHM(),src:"walk-in"}];
     setWalkName("");setWalkSvcs([]);setWalkTech("");
     setOkMsg("Service started!");setTimeout(()=>setOkMsg(""),2500);
     rerender();
   };
 
+  // check-in feed: pending website bookings + real appointments
+  const tToday=todayStr();
+  const apptCards=liveAppts.map(a=>({id:a.id,c:(a.clients&&a.clients.name)||a.notes||"Client",e:(a.employees&&a.employees.name)||"",s:a.service,d:dStrOf(a.scheduled_at),t:hmOf(a.scheduled_at),st:a.status,kind:"appt"})).filter(a=>!DESK_CHECKED.includes(a.id));
+  const todays=apptCards.filter(a=>a.d===tToday);
+  const upcoming=todays.length?todays:apptCards.slice(-8).reverse();
+  const bookingCards=bookings.filter(b=>!DESK_CHECKED.includes(b.id)).map(b=>({id:b.id,c:b.client_name,e:b.technician||"",s:b.service_name,d:b.appt_date,t:(b.appt_time||"").slice(0,5),st:"pending",kind:"booking"}));
+
   const checkIn=a=>{
     DESK_CHECKED=[...DESK_CHECKED,a.id];
-    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:a.c,tech:a.e,items:[{name:a.s,price:priceOf(a.s)}],start:nowHM(),src:"appointment"}];
+    const tech=techs.find(t=>t.name===a.e)?a.e:(nextTech?nextTech.name:a.e||"");
+    DESK_TICKETS=[...DESK_TICKETS,{id:++DESK_SEQ,client:a.c,tech,items:[{name:a.s,price:priceOf(a.s)}],start:nowHM(),src:a.kind==="booking"?"website":"appointment",ref:a}];
+    if(a.kind==="booking") db.from("booking_requests").update({status:"confirmed"},{eq:["id",a.id]});
+    else db.from("appointments").update({status:"in-service"},{eq:["id",a.id]});
     rerender();
   };
 
@@ -1533,17 +1588,21 @@ function FrontDeskPage({user}){
 
   const addItem=p=>{if(!ticket)return;ticket.items=[...ticket.items,{name:p.name,price:parseFloat(p.price||0)}];rerender();};
   const rmItem=i=>{if(!ticket)return;ticket.items=ticket.items.filter((_,x)=>x!==i);rerender();};
-  const resetPay=()=>{setTipPct(null);setTipCustom("");setPay(null);setHelcim(null);};
+  const resetPay=()=>{setTipPct(null);setTipCustom("");setHelcim(null);};
   const selectTicket=id=>{setSel(id===sel?null:id);resetPay();};
 
   const finalize=async(method)=>{
     if(!ticket)return;
-    await db.from("transactions").insert({client_name:ticket.client,employee_name:ticket.tech,service:ticket.items.map(i=>i.name).join(", "),subtotal:sub.toFixed(2),tip_amount:tipA.toFixed(2),total_amount:total.toFixed(2),payment_method:method,created_at:new Date().toISOString()});
+    const empId=empIdByName(ticket.tech);
+    await db.from("transactions").insert({employee_id:empId,total:total.toFixed(2),payment_method:method});
+    if(empId) await db.from("earnings").insert({employee_id:empId,earned_date:todayStr(),service_name:ticket.items.map(i=>i.name).join(", "),amount:sub.toFixed(2),tip:tipA.toFixed(2),source:"frontdesk"});
+    if(ticket.ref&&ticket.ref.kind==="appt") db.from("appointments").update({status:"completed"},{eq:["id",ticket.ref.id]});
+    if(ticket.ref&&ticket.ref.kind==="booking") db.from("booking_requests").update({status:"completed"},{eq:["id",ticket.ref.id]});
     DESK_DONE=[...DESK_DONE,{client:ticket.client,tech:ticket.tech,total,tip:tipA,method,at:nowHM()}];
     DESK_TICKETS=DESK_TICKETS.filter(t=>t.id!==ticket.id);
     setSel(null);resetPay();
     setOkMsg(`Payment received — $${total.toFixed(2)} (${method})`);setTimeout(()=>setOkMsg(""),3500);
-    rerender();
+    loadAll();rerender();
   };
 
   const chargeCard=async()=>{
@@ -1557,12 +1616,7 @@ function FrontDeskPage({user}){
     }catch(e){setHelcim("failed");}
   };
 
-  const cancelTicket=id=>{DESK_TICKETS=DESK_TICKETS.filter(t=>t.id!==id);if(sel===id){setSel(null);resetPay();}rerender();};
-
-  const dayRevenue=DESK_DONE.reduce((s,d)=>s+d.total,0);
-  const dayTips=DESK_DONE.reduce((s,d)=>s+d.tip,0);
-  const pendingAppts=APPTS.filter(a=>!DESK_CHECKED.includes(a.id)&&(a.st==="confirmed"||a.st==="pending"));
-  const filteredProds=prods.filter(p=>!svcSearch||(p.name||"").toLowerCase().includes(svcSearch.toLowerCase()));
+  const cancelTicket=id=>{const t=DESK_TICKETS.find(x=>x.id===id);if(t&&t.ref){if(t.ref.kind==="appt")db.from("appointments").update({status:"scheduled"},{eq:["id",t.ref.id]});DESK_CHECKED=DESK_CHECKED.filter(x=>x!==t.ref.id);}DESK_TICKETS=DESK_TICKETS.filter(t=>t.id!==id);if(sel===id){setSel(null);resetPay();}rerender();};
 
   const kpi=(label,val,sub2)=>(
     <div style={{...card,marginBottom:0,textAlign:"center",padding:"14px 10px"}}>
@@ -1572,36 +1626,45 @@ function FrontDeskPage({user}){
     </div>
   );
 
+  const checkinRow=a=>(
+    <div key={a.kind+a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"0.5px solid rgba(0,0,0,0.05)"}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:500}}>{a.c} {a.kind==="booking"&&<span style={{...pill("web","#185FA5","#E6F1FB"),marginLeft:4}}>WEBSITE</span>}</div>
+        <div style={{fontSize:11,color:MUTED}}>{a.s} · {a.e||"any tech"} · {a.d!==tToday?fmtMD(a.d)+" · ":""}{fmt12(a.t)} <Pill status={a.st==="scheduled"?"confirmed":a.st}/></div>
+      </div>
+      <button style={{...bigBtnO,padding:"10px 16px",flexShrink:0}} onClick={()=>checkIn(a)}>Check In</button>
+    </div>
+  );
+
   return(
     <div style={{position:"relative"}}>
       {reauth!==null&&<ReAuthModal action="Cancel Ticket" onSuccess={()=>{cancelTicket(reauth);setReauth(null);}} onCancel={()=>setReauth(null)}/>}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
         <Ptitle t="Front Desk"/>
-        <span style={{fontSize:11,color:MUTED}}>Next available: <strong style={{color:G}}>{freeTechs.length?freeTechs[0].nick:"—"}</strong></span>
+        <span style={{fontSize:11,color:MUTED}}>Next available: <strong style={{color:G}}>{freeTechs.length?freeTechs[0].name:"—"}</strong></span>
       </div>
       {okMsg&&<div style={{background:"#EAF3DE",border:"0.5px solid #3B6D11",borderRadius:8,padding:"12px 16px",marginBottom:12,color:"#27500A",fontWeight:600,fontSize:14}}>{okMsg}</div>}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:9,marginBottom:14}}>
-        {kpi("REVENUE — TODAY",`$${dayRevenue.toFixed(2)}`,`${DESK_DONE.length} sales · $${dayTips.toFixed(2)} tips`)}
+        {kpi("REVENUE — TODAY",dayEarn?`$${dayEarn.amt.toFixed(2)}`:"…",dayEarn?`${dayEarn.count} services · $${dayEarn.tip.toFixed(2)} tips`:"loading")}
         {kpi("IN SERVICE",DESK_TICKETS.length,"open tickets")}
-        {kpi("APPOINTMENTS",pendingAppts.length,"waiting check-in")}
-        {kpi("FREE TECHS",freeTechs.length,freeTechs.slice(0,3).map(t=>t.nick).join(", ")||"none")}
+        {kpi("TO CHECK IN",bookingCards.length+upcoming.length,`${bookingCards.length} from website`)}
+        {kpi("FREE TECHS",freeTechs.length,(clockedIn.length?"clocked in: ":"")+ (freeTechs.slice(0,3).map(t=>t.name.split(" ")[0]).join(", ")||"none"))}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        {/* LEFT: walk-in + appointments */}
         <div>
           <div style={{...card,borderColor:"rgba(212,175,55,0.45)"}}>
             <Sec t="WALK-IN — START SERVICE"/>
             <input style={{...inpS,padding:"12px 14px",fontSize:14}} placeholder="Client name (optional)" value={walkName} onChange={e=>setWalkName(e.target.value)}/>
             <div style={{display:"flex",gap:8,marginBottom:8}}>
               <select style={{...inpS,marginBottom:0,padding:"12px 10px",fontSize:14}} value={walkTech} onChange={e=>setWalkTech(e.target.value)}>
-                <option value="">Tech: {nextTech?`${nextTech.nick} (next in queue)`:"—"}</option>
-                {techs.map(t=><option key={t.id} value={t.nick}>{t.nick}{busy.includes(t.nick)?" — busy":""}</option>)}
+                <option value="">Tech: {nextTech?`${nextTech.name} (next available)`:"—"}</option>
+                {techs.map(t=><option key={t.id} value={t.name}>{t.name}{busy.includes(t.name)?" — busy":""}{clockedIn.includes(t.name)?" ⏱":""}</option>)}
               </select>
             </div>
             <div style={{fontSize:10,color:MUTED,marginBottom:6}}>Tap services:</div>
-            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12,maxHeight:170,overflowY:"auto"}}>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12,maxHeight:190,overflowY:"auto"}}>
               {prods.map(p=>{
                 const on=!!walkSvcs.find(x=>x.id===p.id);
                 return <button key={p.id} onClick={()=>toggleSvc(p)} style={{padding:"10px 13px",borderRadius:20,border:`1px solid ${on?G:"rgba(0,0,0,0.15)"}`,background:on?"rgba(212,175,55,0.15)":"#fff",color:on?BRONZE:DARK,fontSize:13,fontWeight:on?600:400,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>;
@@ -1614,21 +1677,13 @@ function FrontDeskPage({user}){
           </div>
 
           <div style={card}>
-            <Sec t="TODAY'S APPOINTMENTS — CHECK IN"/>
-            {pendingAppts.length===0&&<p style={{color:MUTED,fontSize:12}}>No appointments waiting.</p>}
-            {pendingAppts.map(a=>(
-              <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"0.5px solid rgba(0,0,0,0.05)"}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:500}}>{a.c}</div>
-                  <div style={{fontSize:11,color:MUTED}}>{a.s} · {a.e} · {fmt12(a.t)} <Pill status={a.st}/></div>
-                </div>
-                <button style={{...bigBtnO,padding:"10px 16px"}} onClick={()=>checkIn(a)}>Check In</button>
-              </div>
-            ))}
+            <Sec t="CHECK IN — WEBSITE BOOKINGS & APPOINTMENTS"/>
+            {bookingCards.length===0&&upcoming.length===0&&<p style={{color:MUTED,fontSize:12}}>Nothing waiting for check-in.</p>}
+            {bookingCards.map(checkinRow)}
+            {upcoming.map(checkinRow)}
           </div>
         </div>
 
-        {/* RIGHT: open tickets + checkout */}
         <div>
           <div style={card}>
             <Sec t="IN SERVICE — TAP TO CHECK OUT"/>
@@ -1662,7 +1717,7 @@ function FrontDeskPage({user}){
               <input style={{...inpS,marginTop:8}} placeholder="+ Add service…" value={svcSearch} onChange={e=>setSvcSearch(e.target.value)}/>
               {svcSearch&&(
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                  {filteredProds.slice(0,6).map(p=><button key={p.id} onClick={()=>{addItem(p);setSvcSearch("");}} style={{padding:"8px 12px",borderRadius:16,border:"1px solid rgba(0,0,0,0.15)",background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>)}
+                  {prods.filter(p=>(p.name||"").toLowerCase().includes(svcSearch.toLowerCase())).slice(0,6).map(p=><button key={p.id} onClick={()=>{addItem(p);setSvcSearch("");}} style={{padding:"8px 12px",borderRadius:16,border:"1px solid rgba(0,0,0,0.15)",background:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>)}
                 </div>
               )}
               <div style={{fontSize:12,color:MUTED,display:"flex",justifyContent:"space-between",padding:"6px 0"}}><span>Subtotal</span><span>${sub.toFixed(2)}</span></div>
@@ -1692,7 +1747,7 @@ function FrontDeskPage({user}){
 
           {DESK_DONE.length>0&&(
             <div style={card}>
-              <Sec t="COMPLETED TODAY"/>
+              <Sec t="COMPLETED TODAY (THIS DEVICE)"/>
               {DESK_DONE.slice().reverse().map((d,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)",fontSize:12}}>
                   <span>{d.client} <span style={{color:MUTED}}>· {d.tech} · {fmt12(d.at)} · {d.method}</span></span>
