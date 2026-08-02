@@ -187,8 +187,9 @@ const NAV={
   Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
 
   FrontDesk:[{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"appts",l:"Appointments",s:"Appts"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"pos",l:"POS Checkout",s:"POS"}],
+  Client:  [{id:"client_home",l:"My Appointments",s:"Home"},{id:"client_book",l:"Book Appointment",s:"Book"}],
 };
-const MOBILE_PRIMARY={Owner:["dash","frontdesk","pos","queue"],Manager:["staff","frontdesk","queue","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"],FrontDesk:["frontdesk","appts","queue","pos"]};
+const MOBILE_PRIMARY={Owner:["dash","frontdesk","pos","queue"],Manager:["staff","frontdesk","queue","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"],FrontDesk:["frontdesk","appts","queue","pos"],Client:["client_home","client_book"]};
 // US formats: 12-hour time + MM/DD/YYYY dates
 const fmt12=t=>{if(!t)return t;const p=String(t).split(":");const h=Number(p[0]);if(isNaN(h)||p[1]===undefined)return t;return `${h%12||12}:${p[1]} ${h>=12?"PM":"AM"}`;};
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -295,32 +296,70 @@ function ReAuthModal({action,onSuccess,onCancel}){
   );
 }
 
-// ─── LOGIN PAGE ───────────────────────────────────────────────
+// ─── LOGIN PAGE (email-only; staff + client) ──────────────────
+const gcalUrl=(title,dateStr,timeStr,durMin=60,details="")=>{
+  const s=`${String(dateStr).replace(/-/g,"")}T${String(timeStr).slice(0,5).replace(":","")}00`;
+  const [h,m]=String(timeStr).split(":").map(Number);
+  const endM=h*60+m+(durMin||60);
+  const e=`${String(dateStr).replace(/-/g,"")}T${String(Math.floor(endM/60)).padStart(2,"0")}${String(endM%60).padStart(2,"0")}00`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${s}/${e}&ctz=America/New_York&details=${encodeURIComponent(details)}&location=${encodeURIComponent("InStyle Nail Bar, 980 Maine Ave SW, Washington DC")}`;
+};
+const notifyBooking=(payload)=>{try{fetch("/api/notify-booking",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(()=>{});}catch(e){}};
+
 function Login({onLogin}){
   const isDeskHost=typeof window!=="undefined"&&window.location.hostname.startsWith("desk.");
-  const [tab,setTab]=useState("email");
+  const [mode,setMode]=useState("staff");   // staff | client | register
   const [email,setEmail]=useState(isDeskHost?"frontdesk@instylebl.com":"");
-  const [phone,setPhone]=useState("");
   const [pw,setPw]=useState("");
+  const [cEmail,setCEmail]=useState("");
+  const [cName,setCName]=useState("");
+  const [cPhone,setCPhone]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
 
-  const doLogin=()=>{
+  const staffLogin=()=>{
     if(!pw){setErr("Please enter your password.");return;}
-    const cred=tab==="email"?email.trim().toLowerCase():phone.trim().replace(/\s/g,"");
-    if(!cred){setErr(tab==="email"?"Enter email.":"Enter phone.");return;}
+    const cred=email.trim().toLowerCase();
+    if(!cred){setErr("Enter your email address.");return;}
     setLoading(true);setErr("");
     setTimeout(()=>{
-      const user=USERS.find(u=>{
-        const em=tab==="email"&&(u.email===cred||u.nick.toLowerCase()+"@gmail.com"===cred||u.nick.toLowerCase()+"@yahoo.com"===cred||u.nick.toLowerCase()+"@icloud.com"===cred);
-        const ph=tab==="phone"&&(u.phone===cred||u.phone.replace(/\D/g,"")===cred.replace(/\D/g,""));
-        return (em||ph)&&u.pw===pw;
-      });
+      const user=USERS.find(u=>u.email===cred&&u.pw===pw);
       setLoading(false);
       if(user) onLogin(user);
-      else setErr("Incorrect credentials. Check your email/phone and password.");
-    },800);
+      else setErr("Incorrect credentials. Check your email and password.");
+    },600);
   };
+
+  const asClientUser=c=>({id:c.id,email:c.email,phone:c.phone,nick:(c.name||"Client").split(" ")[0],fn:c.name,role:"Client",title:"Client"});
+
+  const clientLogin=async()=>{
+    const em=cEmail.trim().toLowerCase();
+    if(!em||!em.includes("@")){setErr("Enter your email address.");return;}
+    setLoading(true);setErr("");
+    const rows=await qraw(`clients?select=id,name,email,phone&email=eq.${encodeURIComponent(em)}&limit=1`);
+    setLoading(false);
+    if(rows.length) onLogin(asClientUser(rows[0]));
+    else{setErr("No account found with this email — please register below.");setMode("register");}
+  };
+
+  const clientRegister=async()=>{
+    const em=cEmail.trim().toLowerCase();
+    if(!cName.trim()){setErr("Enter your full name.");return;}
+    if(!em||!em.includes("@")){setErr("Enter a valid email address.");return;}
+    if(!cPhone.trim()||cPhone.replace(/\D/g,"").length<10){setErr("Enter a valid phone number (used for appointment reminders and offers).");return;}
+    setLoading(true);setErr("");
+    const existing=await qraw(`clients?select=id,name,email,phone&email=eq.${encodeURIComponent(em)}&limit=1`);
+    if(existing.length){setLoading(false);onLogin(asClientUser(existing[0]));return;}
+    const {data,error}=await db.from("clients").insert({name:cName.trim(),email:em,phone:cPhone.trim(),tier:"new",points:0});
+    setLoading(false);
+    if(error||!data||!data[0]){setErr("Could not create your account — please try again.");return;}
+    onLogin(asClientUser(data[0]));
+  };
+
+  const tabBtn=(id,label)=>(
+    <button key={id} onClick={()=>{setMode(id);setErr("");}} style={{flex:1,padding:"6px",border:"none",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:"inherit",background:(mode===id||(id==="client"&&mode==="register"))?"#fff":"transparent",color:(mode===id||(id==="client"&&mode==="register"))?DARK:MUTED,fontWeight:(mode===id||(id==="client"&&mode==="register"))?600:400,transition:"all 0.12s"}}>{label}</button>
+  );
+  const lbl={fontSize:11,color:BRONZE,fontWeight:500,display:"block",marginBottom:4};
 
   return(
     <div style={{minHeight:"100vh",background:DARK,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 16px"}}>
@@ -332,32 +371,59 @@ function Login({onLogin}){
         <div style={{fontSize:14,fontWeight:500,color:DARK,marginBottom:3}}>Welcome back</div>
         <div style={{fontSize:11,color:MUTED,marginBottom:20}}>Sign in to your account</div>
         <div style={{display:"flex",background:IVORY,borderRadius:8,padding:3,marginBottom:16}}>
-          {["email","phone"].map(t=>(
-            <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"6px",border:"none",borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:"inherit",background:tab===t?"#fff":"transparent",color:tab===t?DARK:MUTED,fontWeight:tab===t?600:400,transition:"all 0.12s"}}>
-              {t==="email"?"Email":"Phone number"}
-            </button>
-          ))}
+          {tabBtn("staff","Staff")}
+          {tabBtn("client","Client")}
         </div>
         {err&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:7,padding:"8px 12px",fontSize:11,color:"#A32D2D",marginBottom:12}}>{err}</div>}
-        {tab==="email"
-          ?<><label style={{fontSize:11,color:BRONZE,fontWeight:500,display:"block",marginBottom:4}}>Email address</label><input style={inpS} type="email" placeholder="you@gmail.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></>
-          :<><label style={{fontSize:11,color:BRONZE,fontWeight:500,display:"block",marginBottom:4}}>Phone number</label><input style={inpS} type="tel" placeholder="+1 (571) 000-0000" value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></>
-        }
-        <label style={{fontSize:11,color:BRONZE,fontWeight:500,display:"block",marginBottom:4}}>Password</label>
-        <input style={inpS} type="password" placeholder="Enter your password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}/>
-        <button style={{...btnP,width:"100%",padding:"10px",fontSize:13,marginTop:6}} onClick={doLogin} disabled={loading}>
-          {loading?"Signing in...":"Sign In →"}
-        </button>
+
+        {mode==="staff"&&(<>
+          <label style={lbl}>Email address</label>
+          <input style={inpS} type="email" placeholder="you@instylebl.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&staffLogin()}/>
+          <label style={lbl}>Password</label>
+          <input style={inpS} type="password" placeholder="Enter your password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&staffLogin()}/>
+          <button style={{...btnP,width:"100%",padding:"10px",fontSize:13,marginTop:6}} onClick={staffLogin} disabled={loading}>
+            {loading?"Signing in...":"Sign In →"}
+          </button>
+          <div style={{marginTop:16,padding:12,background:IVORY,borderRadius:8,fontSize:10,color:MUTED}}>
+            <strong style={{color:DARK}}>Demo accounts:</strong><br/>
+            miga@instylebl.com / miga2026 (Owner)<br/>
+            amanda@instylebl.com / amanda2026 (Manager)<br/>
+            jenny@instylebl.com / jenny2026 (Staff)<br/>
+            frontdesk@instylebl.com / desk2026 (Front Desk)
+          </div>
+        </>)}
+
+        {mode==="client"&&(<>
+          <label style={lbl}>Email address</label>
+          <input style={inpS} type="email" placeholder="you@gmail.com" value={cEmail} onChange={e=>setCEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&clientLogin()}/>
+          <button style={{...btnP,width:"100%",padding:"10px",fontSize:13,marginTop:6}} onClick={clientLogin} disabled={loading}>
+            {loading?"Checking...":"Continue →"}
+          </button>
+          <div style={{fontSize:11,color:MUTED,textAlign:"center",marginTop:14}}>
+            First time here? <button onClick={()=>{setMode("register");setErr("");}} style={{background:"none",border:"none",color:BRONZE,fontWeight:600,cursor:"pointer",fontSize:11,fontFamily:"inherit",textDecoration:"underline"}}>Create an account</button>
+          </div>
+        </>)}
+
+        {mode==="register"&&(<>
+          <div style={{fontSize:12,fontWeight:600,color:DARK,marginBottom:10}}>Create your client account</div>
+          <label style={lbl}>Full name</label>
+          <input style={inpS} placeholder="Your name" value={cName} onChange={e=>setCName(e.target.value)}/>
+          <label style={lbl}>Email address</label>
+          <input style={inpS} type="email" placeholder="you@gmail.com" value={cEmail} onChange={e=>setCEmail(e.target.value)}/>
+          <label style={lbl}>Phone number</label>
+          <input style={inpS} type="tel" placeholder="(571) 000-0000" value={cPhone} onChange={e=>setCPhone(e.target.value)}/>
+          <div style={{fontSize:10,color:MUTED,marginBottom:8,lineHeight:1.5}}>We'll never call or text you with reminders — confirmations arrive by email and Google Calendar. Your number is kept for occasional offers and events from InStyle.</div>
+          <button style={{...btnP,width:"100%",padding:"10px",fontSize:13}} onClick={clientRegister} disabled={loading}>
+            {loading?"Creating...":"Register & Sign In →"}
+          </button>
+          <div style={{fontSize:11,color:MUTED,textAlign:"center",marginTop:12}}>
+            Already registered? <button onClick={()=>{setMode("client");setErr("");}} style={{background:"none",border:"none",color:BRONZE,fontWeight:600,cursor:"pointer",fontSize:11,fontFamily:"inherit",textDecoration:"underline"}}>Sign in</button>
+          </div>
+        </>)}
+
         <div style={{fontSize:10,color:MUTED,textAlign:"center",marginTop:14,lineHeight:1.5}}>
           Account managed by <strong>Instyle Nail Bar</strong>.<br/>
           Contact manager if you have trouble signing in.
-        </div>
-        <div style={{marginTop:16,padding:12,background:IVORY,borderRadius:8,fontSize:10,color:MUTED}}>
-          <strong style={{color:DARK}}>Demo accounts:</strong><br/>
-          miga@instylebl.com / miga2026 (Owner)<br/>
-          amanda@instylebl.com / amanda2026 (Manager)<br/>
-          jenny@instylebl.com / jenny2026 (Staff)<br/>
-          frontdesk@instylebl.com / desk2026 (Front Desk)
         </div>
       </div>
     </div>
@@ -1762,6 +1828,132 @@ function FrontDeskPage({user}){
   );
 }
 
+// ─── CLIENT PORTAL ────────────────────────────────────────────
+function ClientHome({user}){
+  const [appts,setAppts]=useState([]);
+  const [books,setBooks]=useState([]);
+  const load=useCallback(()=>{
+    if(user.id) qraw(`appointments?select=id,service,scheduled_at,status,employees(name)&client_id=eq.${user.id}&order=scheduled_at.desc&limit=60`).then(setAppts);
+    qraw(`booking_requests?select=*&client_email=eq.${encodeURIComponent((user.email||"").toLowerCase())}&order=created_at.desc&limit=30`).then(setBooks);
+  },[user]);
+  useEffect(()=>{load();},[load]);
+
+  const now=new Date();
+  const items=[
+    ...books.filter(b=>b.status==="pending"||b.status==="confirmed").map(b=>({key:"b"+b.id,s:b.service_name,d:b.appt_date,t:(b.appt_time||"").slice(0,5),who:b.technician||"any technician",st:b.status,kind:"request"})),
+    ...appts.map(a=>({key:"a"+a.id,s:a.service,d:dStrOf(a.scheduled_at),t:hmOf(a.scheduled_at),who:(a.employees&&a.employees.name)||"—",st:a.status==="scheduled"?"confirmed":a.status,kind:"appt",past:new Date(a.scheduled_at)<now||a.status==="completed"})),
+  ];
+  const upcoming=items.filter(i=>!i.past&&i.st!=="completed"&&i.st!=="cancelled");
+  const history=items.filter(i=>i.past||i.st==="completed");
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:400,color:DARK}}>Welcome, {user.nick}</div>
+          <div style={{fontSize:11,color:MUTED}}>{user.email}</div>
+        </div>
+      </div>
+      <div style={{...card,borderColor:"rgba(212,175,55,0.4)"}}>
+        <Sec t="UPCOMING"/>
+        {upcoming.length===0&&<p style={{color:MUTED,fontSize:12}}>No upcoming appointments — book one from the Book Appointment tab.</p>}
+        {upcoming.map(i=>(
+          <div key={i.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:"0.5px solid rgba(0,0,0,0.05)",gap:8,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:500}}>{i.s}</div>
+              <div style={{fontSize:11,color:MUTED}}>{fmtMD(i.d)}, {fmtY(i.d)} · {fmt12(i.t)} · {i.who} <Pill status={i.st}/></div>
+            </div>
+            <a href={gcalUrl(`InStyle Nail Bar — ${i.s}`,i.d,i.t,60,`Your ${i.s} appointment at InStyle Nail Bar.`)} target="_blank" rel="noreferrer" style={{...btnO,textDecoration:"none",display:"inline-block",fontSize:11,padding:"8px 12px"}}>📅 Add to Google Calendar</a>
+          </div>
+        ))}
+      </div>
+      {history.length>0&&(
+        <div style={card}>
+          <Sec t="HISTORY"/>
+          {history.slice(0,10).map(i=>(
+            <div key={i.key} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"0.5px solid rgba(0,0,0,0.04)",fontSize:12}}>
+              <span>{i.s} <span style={{color:MUTED}}>· {i.who}</span></span>
+              <span style={{color:MUTED}}>{fmtMD(i.d)}, {fmtY(i.d)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{...card,background:IVORY}}>
+        <div style={{fontSize:11,color:MUTED,lineHeight:1.6}}>Confirmations and reminders arrive by <strong>email</strong> and <strong>Google Calendar</strong> — we never call or text. Questions? Call us at (571) 992-4006.</div>
+      </div>
+    </div>
+  );
+}
+
+function ClientBook({user,go}){
+  const [prods,setProds]=useState([]);
+  const [svc,setSvc]=useState(null);
+  const [d,setD]=useState(todayStr());
+  const [t,setT]=useState("10:00");
+  const [ok,setOk]=useState(null);
+  const [err,setErr]=useState("");
+  const [saving,setSaving]=useState(false);
+  useEffect(()=>{db.from("products").select("*").then(({data})=>setProds((data||[]).filter(p=>p.active!==false&&(!p.type||/service/i.test(p.type)))));},[]);
+  const times=["09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30"];
+
+  const submit=async()=>{
+    if(!svc){setErr("Please choose a service.");return;}
+    if(!d||d<todayStr()){setErr("Please choose a date from today onward.");return;}
+    setSaving(true);setErr("");
+    const {error}=await db.from("booking_requests").insert({client_name:user.fn,client_phone:user.phone||"",client_email:(user.email||"").toLowerCase(),service_name:svc.name,service_id:svc.id||null,appt_date:d,appt_time:t+":00",status:"pending",source:"portal"});
+    setSaving(false);
+    if(error){setErr("Could not send your booking — please try again.");return;}
+    notifyBooking({email:user.email,name:user.fn,service:svc.name,date:d,time:t,durMin:svc.duration||60});
+    setOk({svc:svc.name,d,t});
+  };
+
+  if(ok) return(
+    <div>
+      <Ptitle t="Booking Received!"/>
+      <div style={{...card,borderColor:"#3B6D11"}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#27500A",marginBottom:6}}>✓ {ok.svc}</div>
+        <div style={{fontSize:12,color:MUTED,marginBottom:14}}>{fmtMD(ok.d)}, {fmtY(ok.d)} · {fmt12(ok.t)} — we'll confirm shortly. A confirmation email is on its way.</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <a href={gcalUrl(`InStyle Nail Bar — ${ok.svc}`,ok.d,ok.t,60,"Your appointment at InStyle Nail Bar.")} target="_blank" rel="noreferrer" style={{...btnP,textDecoration:"none",display:"inline-block"}}>📅 Add to Google Calendar</a>
+          <button style={btnO} onClick={()=>{setOk(null);setSvc(null);go&&go();}}>View My Appointments</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div>
+      <Ptitle t="Book Appointment"/>
+      {err&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:7,padding:"9px 12px",fontSize:11,color:"#A32D2D",marginBottom:10}}>{err}</div>}
+      <div style={card}>
+        <Sec t="1 · CHOOSE SERVICE"/>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          {prods.map(p=>{
+            const on=svc&&svc.id===p.id;
+            return <button key={p.id} onClick={()=>setSvc(p)} style={{padding:"11px 14px",borderRadius:20,border:`1px solid ${on?G:"rgba(0,0,0,0.15)"}`,background:on?"rgba(212,175,55,0.15)":"#fff",color:on?BRONZE:DARK,fontSize:13,fontWeight:on?600:400,cursor:"pointer",fontFamily:"inherit"}}>{p.name} · ${parseFloat(p.price||0).toFixed(0)}</button>;
+          })}
+          {prods.length===0&&<span style={{fontSize:11,color:MUTED}}>Loading services…</span>}
+        </div>
+      </div>
+      <div style={card}>
+        <Sec t="2 · PICK DATE & TIME"/>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <div><label style={{fontSize:10,color:MUTED,display:"block",marginBottom:3}}>Date</label>
+          <input type="date" style={{...inpS,width:170,marginBottom:0}} min={todayStr()} value={d} onChange={e=>setD(e.target.value)}/></div>
+          <div><label style={{fontSize:10,color:MUTED,display:"block",marginBottom:3}}>Time</label>
+          <select style={{...inpS,width:140,marginBottom:0}} value={t} onChange={e=>setT(e.target.value)}>
+            {times.map(x=><option key={x} value={x}>{fmt12(x)}</option>)}
+          </select></div>
+        </div>
+      </div>
+      <button style={{...btnP,width:"100%",padding:"13px",fontSize:14,opacity:svc?1:0.5}} disabled={!svc||saving} onClick={submit}>
+        {saving?"Sending…":`Request Booking${svc?` — ${svc.name}`:""} →`}
+      </button>
+      <div style={{fontSize:10,color:MUTED,marginTop:10,textAlign:"center"}}>You'll get an email confirmation and can add it to Google Calendar. No calls or texts.</div>
+    </div>
+  );
+}
+
 // ─── MOBILE BOTTOM NAV ────────────────────────────────────────
 function MobileNav({nav,page,setPage,user,onSignOut}){
   const [open,setOpen]=useState(false);
@@ -1808,18 +2000,20 @@ export default function App(){
 
   const handleLogin=u=>{
     setUser(u);
-    setPage(u.role==="Owner"?"dash":u.role==="Manager"?"staff":u.role==="FrontDesk"?"frontdesk":"my_dash");
+    setPage(u.role==="Owner"?"dash":u.role==="Manager"?"staff":u.role==="FrontDesk"?"frontdesk":u.role==="Client"?"client_home":"my_dash");
   };
 
   if(!user) return <Login onLogin={handleLogin}/>;
 
   const nav=NAV[user.role]||[];
-  const rp=user.role==="Owner"?"#3C3489":user.role==="Manager"?"#854F0B":user.role==="FrontDesk"?"#0E6E6E":"#3B6D11";
-  const rb=user.role==="Owner"?"#EEEDFE":user.role==="Manager"?"#FAEEDA":user.role==="FrontDesk"?"#DFF3F3":"#EAF3DE";
+  const rp=user.role==="Owner"?"#3C3489":user.role==="Manager"?"#854F0B":user.role==="FrontDesk"?"#0E6E6E":user.role==="Client"?"#185FA5":"#3B6D11";
+  const rb=user.role==="Owner"?"#EEEDFE":user.role==="Manager"?"#FAEEDA":user.role==="FrontDesk"?"#DFF3F3":user.role==="Client"?"#E6F1FB":"#EAF3DE";
 
   const PAGES={
     dash:       <DashPage/>,
     frontdesk:  <FrontDeskPage user={user}/>,
+    client_home:<ClientHome user={user}/>,
+    client_book:<ClientBook user={user} go={()=>setPage("client_home")}/>,
     revenue:    <RevenuePage/>,
     schedule:   <SchedulePage/>,
     employees:  <EmployeesPage/>,
