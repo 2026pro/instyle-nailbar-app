@@ -336,7 +336,7 @@ function Login({onLogin}){
     const em=cEmail.trim().toLowerCase();
     if(!em||!em.includes("@")){setErr("Enter your email address.");return;}
     setLoading(true);setErr("");
-    const rows=await qraw(`clients?select=id,name,email,phone&email=eq.${encodeURIComponent(em)}&limit=1`);
+    const rows=await qraw(`clients?select=id,name,email,phone&email=ilike.${encodeURIComponent(em)}&limit=1`);
     setLoading(false);
     if(rows.length) onLogin(asClientUser(rows[0]));
     else{setErr("No account found with this email — please register below.");setMode("register");}
@@ -348,7 +348,7 @@ function Login({onLogin}){
     if(!em||!em.includes("@")){setErr("Enter a valid email address.");return;}
     if(!cPhone.trim()||cPhone.replace(/\D/g,"").length<10){setErr("Enter a valid phone number (used for appointment reminders and offers).");return;}
     setLoading(true);setErr("");
-    const existing=await qraw(`clients?select=id,name,email,phone&email=eq.${encodeURIComponent(em)}&limit=1`);
+    const existing=await qraw(`clients?select=id,name,email,phone&email=ilike.${encodeURIComponent(em)}&limit=1`);
     if(existing.length){setLoading(false);onLogin(asClientUser(existing[0]));return;}
     const {data,error}=await db.from("clients").insert({name:cName.trim(),email:em,phone:cPhone.trim(),tier:"new",points:0});
     setLoading(false);
@@ -1834,13 +1834,13 @@ function ClientHome({user}){
   const [books,setBooks]=useState([]);
   const load=useCallback(()=>{
     if(user.id) qraw(`appointments?select=id,service,scheduled_at,status,employees(name)&client_id=eq.${user.id}&order=scheduled_at.desc&limit=60`).then(setAppts);
-    qraw(`booking_requests?select=*&client_email=eq.${encodeURIComponent((user.email||"").toLowerCase())}&order=created_at.desc&limit=30`).then(setBooks);
+    qraw(`booking_requests?select=*&client_email=ilike.${encodeURIComponent((user.email||"").toLowerCase())}&order=created_at.desc&limit=30`).then(setBooks);
   },[user]);
   useEffect(()=>{load();},[load]);
 
   const now=new Date();
   const items=[
-    ...books.filter(b=>b.status==="pending"||b.status==="confirmed").map(b=>({key:"b"+b.id,s:b.service_name,d:b.appt_date,t:(b.appt_time||"").slice(0,5),who:b.technician||"any technician",st:b.status,kind:"request"})),
+    ...books.filter(b=>b.status==="pending"||b.status==="confirmed").map(b=>({key:"b"+b.id,s:b.service_name,d:b.appt_date,t:(b.appt_time||"").slice(0,5),who:b.technician||"any technician",st:b.status,kind:"request",past:!!b.appt_date&&b.appt_date<todayStr()})),
     ...appts.map(a=>({key:"a"+a.id,s:a.service,d:dStrOf(a.scheduled_at),t:hmOf(a.scheduled_at),who:(a.employees&&a.employees.name)||"—",st:a.status==="scheduled"?"confirmed":a.status,kind:"appt",past:new Date(a.scheduled_at)<now||a.status==="completed"})),
   ];
   const upcoming=items.filter(i=>!i.past&&i.st!=="completed"&&i.st!=="cancelled");
