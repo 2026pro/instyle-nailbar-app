@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.instylebl.os",
+        "sha256_cert_fingerprints": ["65:C8:BE:83:31:1C:91:77:A3:F2:F0:A9:55:45:C4:63:87:E9:87:6C:1B:8F:65:56:40:24:FC:D4:74:E3:B4:7F"]
+      }
+    }]
