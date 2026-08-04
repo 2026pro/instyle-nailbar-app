@@ -12,13 +12,13 @@ beforeEach(() => {
     let data = [];
     if (method === "GET") {
       if (u.includes("/transactions"))
-        data = [{ id: 1, total: "56.00", payment_method: "Card", created_at: "2026-08-04T14:00:00Z", employee_id: 3, employees: { name: "Alsu Baatar" } }];
+        data = [{ id: "tx-uuid-1", total: "56.00", payment_method: "Card", created_at: "2026-08-04T14:00:00Z", employee_id: "emp-uuid-alsu", employees: { name: "Alsu Baatar" } }];
       else if (u.includes("/earnings"))
-        data = [{ id: 9, employee_id: 3, earned_date: "2026-08-04", service_name: "Classic Pedicure", amount: "46.00", tip: "10.00", source: "frontdesk", employees: { name: "Alsu Baatar" } }];
+        data = [{ id: "earn-uuid-9", employee_id: "emp-uuid-alsu", earned_date: "2026-08-04", service_name: "Classic Pedicure", amount: "46.00", tip: "10.00", source: "frontdesk", employees: { name: "Alsu Baatar" } }];
       else if (u.includes("/employees"))
-        data = [{ id: 3, name: "Alsu Baatar", role: "Nail Tech" }, { id: 4, name: "Jenny T", role: "Nail Tech" }];
+        data = [{ id: "emp-uuid-alsu", name: "Alsu Baatar", role: "Nail Tech" }, { id: "emp-uuid-jenny", name: "Jenny T", role: "Nail Tech" }];
       else if (u.includes("/timeclock"))
-        data = [{ id: 5, employee_name: "Alsu Baatar", date: "2026-08-04", clock_in: "09:00", clock_out: null }];
+        data = [{ id: "clk-uuid-5", employee_name: "Alsu Baatar", date: "2026-08-04", clock_in: "2026-08-04T09:00:00+00:00", clock_out: null }];
       else data = [];
     }
     return Promise.resolve({ ok: true, status: method === "GET" ? 200 : 201, json: () => Promise.resolve(data) });
@@ -62,11 +62,11 @@ test("refund requires a reason, then writes reversal tx + reversal earnings + au
   const txPost = calls.find(c => c.method === "POST" && c.url.includes("/transactions"));
   expect(txPost.body.total).toBe("-56.00");
   expect(txPost.body.payment_method).toMatch(/^Refund — Card/);
-  expect(txPost.body.employee_id).toBe(3);
+  expect(txPost.body.employee_id).toBe("emp-uuid-alsu");
 
   const earnPost = calls.find(c => c.method === "POST" && c.url.includes("/earnings"));
   expect(earnPost.body.amount).toBe("-56.00");
-  expect(earnPost.body.employee_id).toBe(3);
+  expect(earnPost.body.employee_id).toBe("emp-uuid-alsu"); // uuid string, never Number()
   expect(earnPost.body.source).toBe("fixcenter");
   expect(earnPost.body.service_name).toMatch(/^REFUND: Wrong amount/);
 
@@ -75,7 +75,7 @@ test("refund requires a reason, then writes reversal tx + reversal earnings + au
   expect(auditPost.body.actor_role).toBe("FrontDesk");
   expect(auditPost.body.reason).toBe("Wrong amount charged by staff");
   expect(auditPost.body.target_table).toBe("transactions");
-  expect(auditPost.body.target_id).toBe("1");
+  expect(auditPost.body.target_id).toBe("tx-uuid-1");
 });
 
 test("earnings fix PATCHes the row and logs before/after", async () => {
@@ -89,19 +89,19 @@ test("earnings fix PATCHes the row and logs before/after", async () => {
 
   const panel = screen.getByText("CORRECT THIS EARNING").closest("div").parentElement;
   const selects = within(panel).getAllByRole("combobox");
-  fireEvent.change(selects[0], { target: { value: "4" } }); // reassign to Jenny T
+  fireEvent.change(selects[0], { target: { value: "emp-uuid-jenny" } }); // reassign to Jenny T
   fireEvent.change(within(panel).getByPlaceholderText(/Cashier charged the wrong/), { target: { value: "Credited to wrong tech" } });
   fireEvent.click(within(panel).getByText("Save Fix"));
   await waitFor(() => expect(screen.getByText(/Earning corrected/)).toBeTruthy());
 
-  const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/earnings?id=eq.9"));
-  expect(patch.body.employee_id).toBe(4);
+  const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/earnings?id=eq.earn-uuid-9"));
+  expect(patch.body.employee_id).toBe("emp-uuid-jenny");
   expect(patch.body.amount).toBe("46.00");
 
   const audit = calls.find(c => c.method === "POST" && c.url.includes("/audit_log"));
   expect(audit.body.action).toBe("EditEarning");
-  expect(audit.body.details.before.employee_id).toBe(3);
-  expect(audit.body.details.after.employee_id).toBe(4);
+  expect(audit.body.details.before.employee_id).toBe("emp-uuid-alsu");
+  expect(audit.body.details.after.employee_id).toBe("emp-uuid-jenny");
 });
 
 test("timeclock: correct an entry and add a missed one", async () => {
@@ -121,8 +121,9 @@ test("timeclock: correct an entry and add a missed one", async () => {
   fireEvent.click(within(panel).getByText("Save Fix"));
   await waitFor(() => expect(screen.getByText(/Time entry corrected/)).toBeTruthy());
 
-  const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/timeclock?id=eq.5"));
-  expect(patch.body.clock_out).toBe("18:30");
+  const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/timeclock?id=eq.clk-uuid-5"));
+  expect(patch.body.clock_out).toBe("2026-08-04T18:30:00+00:00"); // HH:MM rebuilt into stored timestamptz format
+  expect(patch.body.clock_in).toBe("2026-08-04T09:00:00+00:00");
   const audit = calls.find(c => c.method === "POST" && c.url.includes("/audit_log") && c.body.action === "EditTimeclock");
   expect(audit.body.details.before.clock_out).toBe(null);
 });

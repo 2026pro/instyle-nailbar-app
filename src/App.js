@@ -1996,12 +1996,15 @@ function FixCenterPage({user}){
     if(needReason())return;
     const amt=parseFloat(form.amount)||0;
     if(amt<=0){setErr("Refund amount must be greater than 0.");return;}
+    const orig=Math.abs(parseFloat(sel.row.total)||0);
+    if(orig>0&&amt>orig+0.001){setErr(`Refund cannot exceed the original charge of $${orig.toFixed(2)}.`);return;}
     setBusy(true);
     const t=sel.row;
     const {error}=await db.from("transactions").insert({employee_id:t.employee_id||null,total:(-amt).toFixed(2),payment_method:`Refund — ${t.payment_method||"?"}`});
     if(error)return fail();
     if(form.revEarn&&form.empId){
-      await db.from("earnings").insert({employee_id:Number(form.empId),earned_date:form.date||todayStr(),service_name:`REFUND: ${reason.trim().slice(0,80)}`,amount:(-(parseFloat(form.earnAmount)||0)).toFixed(2),tip:(-(parseFloat(form.tipAmount)||0)).toFixed(2),source:"fixcenter"});
+      const {error:eErr}=await db.from("earnings").insert({employee_id:form.empId,earned_date:form.date||todayStr(),service_name:`REFUND: ${reason.trim().slice(0,80)}`,amount:(-(parseFloat(form.earnAmount)||0)).toFixed(2),tip:(-(parseFloat(form.tipAmount)||0)).toFixed(2),source:"fixcenter"});
+      if(eErr){await logFix("Refund","transactions",t.id,{original_total:t.total,refund:amt.toFixed(2),payment_method:t.payment_method,earnings_reversed:false,earnings_error:true});return fail("Refund transaction saved, but the earnings reversal FAILED — fix the tech's earning manually in the Staff Earnings tab.");}
     }
     await logFix("Refund","transactions",t.id,{original_total:t.total,refund:amt.toFixed(2),payment_method:t.payment_method,earnings_reversed:!!(form.revEarn&&form.empId)});
     finish(`Refund recorded — $${amt.toFixed(2)}.${/card|helcim/i.test(t.payment_method||"")?" ⚠ Card payment: also return the money in the Helcim dashboard / terminal.":""}`);
@@ -2013,7 +2016,7 @@ function FixCenterPage({user}){
     setBusy(true);
     const a=sel.row;
     const before={service:a.service,scheduled_at:a.scheduled_at,status:a.status,employee_id:a.employee_id};
-    const after={service:form.service,scheduled_at:new Date(`${form.d}T${form.t}:00`).toISOString(),status:form.status,employee_id:form.empId?Number(form.empId):null};
+    const after={service:form.service,scheduled_at:new Date(`${form.d}T${form.t}:00`).toISOString(),status:form.status,employee_id:form.empId||null};
     const {error}=await db.from("appointments").update(after,{eq:["id",a.id]});
     if(error)return fail();
     await logFix("EditAppointment","appointments",a.id,{before,after});
@@ -2037,19 +2040,24 @@ function FixCenterPage({user}){
     setBusy(true);
     const e=sel.row;
     const before={employee_id:e.employee_id,amount:e.amount,tip:e.tip,earned_date:e.earned_date,service_name:e.service_name};
-    const after={employee_id:form.empId?Number(form.empId):e.employee_id,amount:(parseFloat(form.amount)||0).toFixed(2),tip:(parseFloat(form.tip)||0).toFixed(2),earned_date:form.date,service_name:form.service};
+    const after={employee_id:form.empId||e.employee_id,amount:(parseFloat(form.amount)||0).toFixed(2),tip:(parseFloat(form.tip)||0).toFixed(2),earned_date:form.date,service_name:form.service};
     const {error}=await db.from("earnings").update(after,{eq:["id",e.id]});
     if(error)return fail();
     await logFix("EditEarning","earnings",e.id,{before,after});
     finish("Earning corrected — staff Pay and Revenue update immediately.");
   };
 
+  // timeclock stores wall-clock times as timestamptz (e.g. 2026-07-28T10:00:00+00:00);
+  // accept "HH:MM" and rebuild the full timestamp on that date, or pass full values through.
+  const toClockTs=(val,date)=>{const v=String(val==null?"":val).trim();if(!v)return null;if(/^\d{1,2}:\d{2}$/.test(v))return `${date}T${v.padStart(5,"0")}:00+00:00`;return v;};
+  const clockHM=v=>v==null?"":(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(v))?String(v).slice(11,16):String(v));
+
   const doClockFix=async()=>{
     if(needReason())return;
     setBusy(true);
     const c=sel.row;
     const before={date:c.date,clock_in:c.clock_in,clock_out:c.clock_out};
-    const after={date:form.date,clock_in:form.cin||null,clock_out:form.cout||null};
+    const after={date:form.date,clock_in:toClockTs(form.cin,form.date),clock_out:toClockTs(form.cout,form.date)};
     const {error}=await db.from("timeclock").update(after,{eq:["id",c.id]});
     if(error)return fail();
     await logFix("EditTimeclock","timeclock",c.id,{employee:c.employee_name,before,after});
@@ -2060,7 +2068,9 @@ function FixCenterPage({user}){
     if(needReason())return;
     if(!form.emp){setErr("Choose the employee.");return;}
     setBusy(true);
-    const body={employee_name:form.emp,date:form.date||todayStr(),clock_in:form.cin||null,clock_out:form.cout||null};
+    const d0=form.date||todayStr();
+    const er=emps.find(x=>x.name===form.emp);
+    const body={employee_id:er?er.id:null,employee_name:form.emp,date:d0,clock_in:toClockTs(form.cin,d0),clock_out:toClockTs(form.cout,d0)};
     const {error}=await db.from("timeclock").insert(body);
     if(error)return fail();
     await logFix("AddTimeclock","timeclock","new",body);
@@ -2119,7 +2129,7 @@ function FixCenterPage({user}){
           {txs.length===0&&<p style={{color:MUTED,fontSize:12}}>No transactions found.</p>}
           {txs.map(t=>(
             <div key={t.id}>
-              <div style={rowStyle(sel&&sel.kind==="tx"&&sel.row.id===t.id)} onClick={()=>pick("tx",t,{amount:Math.abs(parseFloat(t.total)||0).toFixed(2),revEarn:true,empId:t.employee_id||"",earnAmount:Math.abs(parseFloat(t.total)||0).toFixed(2),tipAmount:"0",date:dStrOf(t.created_at)})}>
+              <div style={{...rowStyle(sel&&sel.kind==="tx"&&sel.row.id===t.id),cursor:parseFloat(t.total)<0?"default":"pointer",opacity:parseFloat(t.total)<0?0.6:1}} onClick={()=>{if(parseFloat(t.total)<0)return;pick("tx",t,{amount:Math.abs(parseFloat(t.total)||0).toFixed(2),revEarn:true,empId:t.employee_id||"",earnAmount:Math.abs(parseFloat(t.total)||0).toFixed(2),tipAmount:"0",date:dStrOf(t.created_at)});}}>
                 <div>
                   <div style={{fontSize:12,fontWeight:600,color:parseFloat(t.total)<0?"#A32D2D":DARK}}>${parseFloat(t.total||0).toFixed(2)} · {t.payment_method||"—"}</div>
                   <div style={{fontSize:10,color:MUTED}}>{(t.employees&&t.employees.name)||"no tech"} · <DateCell d={dStrOf(t.created_at)} t={hmOf(t.created_at)}/></div>
@@ -2210,7 +2220,7 @@ function FixCenterPage({user}){
                     <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.d} onChange={e=>setForm(f=>({...f,d:e.target.value}))}/></div>
                     <div><label style={lbl}>Time</label><input style={inpS} type="time" value={form.t} onChange={e=>setForm(f=>({...f,t:e.target.value}))}/></div>
                     <div><label style={lbl}>Status</label>
-                      <select style={inpS} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{["pending","confirmed","completed","cancelled"].map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                      <select style={inpS} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{Array.from(new Set(["pending","confirmed","completed","cancelled","past",form.status])).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
                     <div><label style={lbl}>Technician (name)</label><input style={inpS} value={form.tech} onChange={e=>setForm(f=>({...f,tech:e.target.value}))}/></div>
                     <div style={{gridColumn:"span 2"}}><label style={lbl}>Service</label><input style={inpS} value={form.service} onChange={e=>setForm(f=>({...f,service:e.target.value}))}/></div>
                   </div>
@@ -2269,8 +2279,8 @@ function FixCenterPage({user}){
               </select></div>
             {sel&&sel.kind==="clockadd"&&(<>
               <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-              <div><label style={lbl}>Clock in (as stored, e.g. 09:00)</label><input style={inpS} value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
-              <div><label style={lbl}>Clock out</label><input style={inpS} value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
+              <div><label style={lbl}>Clock in (HH:MM, e.g. 09:00)</label><input style={inpS} placeholder="09:00" value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
+              <div><label style={lbl}>Clock out (HH:MM)</label><input style={inpS} placeholder="18:30" value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
             </>)}
           </div>
           {sel&&sel.kind==="clockadd"&&(<>{reasonBox}{applyBtns(doClockAdd,"Add Entry")}</>)}
@@ -2280,10 +2290,10 @@ function FixCenterPage({user}){
           {clocks.length===0&&<p style={{color:MUTED,fontSize:12}}>No time entries found.</p>}
           {clocks.map(c=>(
             <div key={c.id}>
-              <div style={rowStyle(sel&&sel.kind==="clock"&&sel.row.id===c.id)} onClick={()=>pick("clock",c,{date:c.date,cin:c.clock_in==null?"":String(c.clock_in),cout:c.clock_out==null?"":String(c.clock_out)})}>
+              <div style={rowStyle(sel&&sel.kind==="clock"&&sel.row.id===c.id)} onClick={()=>pick("clock",c,{date:c.date,cin:clockHM(c.clock_in),cout:clockHM(c.clock_out)})}>
                 <div>
                   <div style={{fontSize:12,fontWeight:600}}>{c.employee_name}</div>
-                  <div style={{fontSize:10,color:MUTED}}><DateCell d={c.date}/> · in: {c.clock_in==null?"—":String(c.clock_in)} · out: {c.clock_out==null?"— (still clocked in)":String(c.clock_out)}</div>
+                  <div style={{fontSize:10,color:MUTED}}><DateCell d={c.date}/> · in: {c.clock_in==null?"—":fmt12(clockHM(c.clock_in))} · out: {c.clock_out==null?"— (still clocked in)":fmt12(clockHM(c.clock_out))}</div>
                 </div>
                 <span style={{fontSize:10,color:BRONZE}}>Fix ▸</span>
               </div>
@@ -2291,11 +2301,11 @@ function FixCenterPage({user}){
                 <div style={{...card,borderColor:G,marginBottom:10}}>
                   <Sec t="CORRECT TIME ENTRY"/>
                   {errBox}
-                  <div style={{fontSize:10,color:MUTED,marginBottom:8}}>Keep the same format as the stored value. Leave clock-out empty to keep the employee clocked in.</div>
+                  <div style={{fontSize:10,color:MUTED,marginBottom:8}}>Times are HH:MM (24-hour, e.g. 09:00 / 18:30). Leave clock-out empty to keep the employee clocked in.</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                     <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-                    <div><label style={lbl}>Clock in</label><input style={inpS} value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
-                    <div><label style={lbl}>Clock out</label><input style={inpS} value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
+                    <div><label style={lbl}>Clock in</label><input style={inpS} placeholder="09:00" value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
+                    <div><label style={lbl}>Clock out</label><input style={inpS} placeholder="18:30" value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
                   </div>
                   {reasonBox}
                   {applyBtns(doClockFix,"Save Fix")}
