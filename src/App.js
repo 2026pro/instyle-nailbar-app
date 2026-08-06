@@ -182,14 +182,18 @@ const db={
 
 // ─── STYLE TOKENS ─────────────────────────────────────────────
 const NAV={
-  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"fixcenter",l:"Fix Center",s:"Fix"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
-  Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"fixcenter",l:"Fix Center",s:"Fix"},{id:"audit",l:"Audit Log",s:"Audit"}],
+  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
+  Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"audit",l:"Audit Log",s:"Audit"}],
   Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
 
-  FrontDesk:[{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"appts",l:"Appointments",s:"Appts"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"fixcenter",l:"Fix Center",s:"Fix"}],
-  Client:  [{id:"client_home",l:"My Appointments",s:"Home"},{id:"client_book",l:"Book Appointment",s:"Book"}],
+  FrontDesk:[{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"appts",l:"Appointments",s:"Appts"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"pos",l:"POS Checkout",s:"POS"}],
+  Client:  [{id:"client_home",l:"My Appointments",s:"Home"},{id:"client_book",l:"Book Appointment",s:"Book"},{id:"art",l:"Nail Art",s:"Art"}],
 };
-const MOBILE_PRIMARY={Owner:["dash","frontdesk","pos","queue"],Manager:["staff","frontdesk","queue","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"],FrontDesk:["frontdesk","appts","queue","pos"],Client:["client_home","client_book"]};
+NAV.Owner.push({id:"art",l:"Nail Art",s:"Art"});
+NAV.Manager.push({id:"art",l:"Nail Art",s:"Art"});
+NAV.Employee.push({id:"art",l:"Nail Art",s:"Art"});
+NAV.FrontDesk.push({id:"art",l:"Nail Art",s:"Art"});
+const MOBILE_PRIMARY={Owner:["dash","frontdesk","pos","queue"],Manager:["staff","frontdesk","queue","appts"],Employee:["my_dash","my_sched","my_queue","my_leave"],FrontDesk:["frontdesk","appts","queue","art"],Client:["client_home","client_book","art"]};
 // US formats: 12-hour time + MM/DD/YYYY dates
 const fmt12=t=>{if(!t)return t;const p=String(t).split(":");const h=Number(p[0]);if(isNaN(h)||p[1]===undefined)return t;return `${h%12||12}:${p[1]} ${h>=12?"PM":"AM"}`;};
 const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -1954,395 +1958,43 @@ function ClientBook({user,go}){
   );
 }
 
-// ─── FIX CENTER (self-service error correction; every fix audited) ───
-function FixCenterPage({user}){
-  const [tab,setTab]=useState("tx");
-  const [txs,setTxs]=useState([]);
-  const [earns,setEarns]=useState([]);
-  const [fAppts,setFAppts]=useState([]);
-  const [fBooks,setFBooks]=useState([]);
-  const [clocks,setClocks]=useState([]);
-  const [emps,setEmps]=useState([]);
-  const [logs,setLogs]=useState([]);
-  const [sel,setSel]=useState(null);   // {kind,row}
-  const [form,setForm]=useState({});
-  const [reason,setReason]=useState("");
-  const [err,setErr]=useState("");
-  const [okMsg,setOkMsg]=useState("");
-  const [busy,setBusy]=useState(false);
-  const [issueMsg,setIssueMsg]=useState("");
-
-  const loadAll=useCallback(()=>{
-    qraw("transactions?select=id,total,payment_method,created_at,employee_id,employees(name)&order=created_at.desc&limit=60").then(setTxs);
-    qraw("earnings?select=id,employee_id,earned_date,service_name,amount,tip,source,employees(name)&order=id.desc&limit=60").then(setEarns);
-    qraw("appointments?select=id,service,scheduled_at,status,notes,employee_id,clients(name),employees(name)&order=scheduled_at.desc&limit=60").then(setFAppts);
-    qraw("booking_requests?select=*&order=created_at.desc&limit=40").then(setFBooks);
-    qraw("timeclock?select=*&order=id.desc&limit=60").then(setClocks);
-    qraw("employees?select=id,name,role&status=eq.active&order=name.asc").then(setEmps);
-    qraw("audit_log?select=*&order=created_at.desc&limit=100").then(setLogs);
-  },[]);
-  useEffect(()=>{loadAll();},[loadAll]);
-
-  const techs=emps.filter(e=>isTechRole(e.role));
-  const closeSel=()=>{setSel(null);setForm({});setReason("");setErr("");};
-  const pick=(kind,row,f)=>{setSel({kind,row});setForm(f);setReason("");setErr("");};
-  const needReason=()=>{if(!reason.trim()){setErr("Please describe WHY you are making this fix — the reason is saved to the audit log.");return true;}return false;};
-  const logFix=(action,table,id,details)=>db.from("audit_log").insert({actor:user.nick||user.fn||user.email,actor_role:user.role,action,target_table:table,target_id:String(id==null?"":id),reason:reason.trim(),details});
-  const finish=(msg)=>{closeSel();setBusy(false);setOkMsg(msg);setTimeout(()=>setOkMsg(""),6000);loadAll();};
-  const fail=(msg)=>{setBusy(false);setErr(msg||"Could not save the fix — check connection and try again.");};
-
-  // ── actions ──
-  const doRefund=async()=>{
-    if(needReason())return;
-    const amt=parseFloat(form.amount)||0;
-    if(amt<=0){setErr("Refund amount must be greater than 0.");return;}
-    const orig=Math.abs(parseFloat(sel.row.total)||0);
-    if(orig>0&&amt>orig+0.001){setErr(`Refund cannot exceed the original charge of $${orig.toFixed(2)}.`);return;}
-    setBusy(true);
-    const t=sel.row;
-    const {error}=await db.from("transactions").insert({employee_id:t.employee_id||null,total:(-amt).toFixed(2),payment_method:`Refund — ${t.payment_method||"?"}`});
-    if(error)return fail();
-    if(form.revEarn&&form.empId){
-      const {error:eErr}=await db.from("earnings").insert({employee_id:form.empId,earned_date:form.date||todayStr(),service_name:`REFUND: ${reason.trim().slice(0,80)}`,amount:(-(parseFloat(form.earnAmount)||0)).toFixed(2),tip:(-(parseFloat(form.tipAmount)||0)).toFixed(2),source:"fixcenter"});
-      if(eErr){await logFix("Refund","transactions",t.id,{original_total:t.total,refund:amt.toFixed(2),payment_method:t.payment_method,earnings_reversed:false,earnings_error:true});return fail("Refund transaction saved, but the earnings reversal FAILED — fix the tech's earning manually in the Staff Earnings tab.");}
-    }
-    await logFix("Refund","transactions",t.id,{original_total:t.total,refund:amt.toFixed(2),payment_method:t.payment_method,earnings_reversed:!!(form.revEarn&&form.empId)});
-    finish(`Refund recorded — $${amt.toFixed(2)}.${/card|helcim/i.test(t.payment_method||"")?" ⚠ Card payment: also return the money in the Helcim dashboard / terminal.":""}`);
-  };
-
-  const doApptFix=async()=>{
-    if(needReason())return;
-    if(!form.d||!form.t){setErr("Pick a date and time.");return;}
-    setBusy(true);
-    const a=sel.row;
-    const before={service:a.service,scheduled_at:a.scheduled_at,status:a.status,employee_id:a.employee_id};
-    const after={service:form.service,scheduled_at:new Date(`${form.d}T${form.t}:00`).toISOString(),status:form.status,employee_id:form.empId||null};
-    const {error}=await db.from("appointments").update(after,{eq:["id",a.id]});
-    if(error)return fail();
-    await logFix("EditAppointment","appointments",a.id,{before,after});
-    finish("Appointment updated.");
-  };
-
-  const doBookFix=async()=>{
-    if(needReason())return;
-    setBusy(true);
-    const b=sel.row;
-    const before={service_name:b.service_name,appt_date:b.appt_date,appt_time:b.appt_time,technician:b.technician,status:b.status};
-    const after={service_name:form.service,appt_date:form.d,appt_time:(form.t||"09:00")+":00",technician:form.tech||null,status:form.status};
-    const {error}=await db.from("booking_requests").update(after,{eq:["id",b.id]});
-    if(error)return fail();
-    await logFix("EditBooking","booking_requests",b.id,{before,after});
-    finish("Booking request updated.");
-  };
-
-  const doEarnFix=async()=>{
-    if(needReason())return;
-    setBusy(true);
-    const e=sel.row;
-    const before={employee_id:e.employee_id,amount:e.amount,tip:e.tip,earned_date:e.earned_date,service_name:e.service_name};
-    const after={employee_id:form.empId||e.employee_id,amount:(parseFloat(form.amount)||0).toFixed(2),tip:(parseFloat(form.tip)||0).toFixed(2),earned_date:form.date,service_name:form.service};
-    const {error}=await db.from("earnings").update(after,{eq:["id",e.id]});
-    if(error)return fail();
-    await logFix("EditEarning","earnings",e.id,{before,after});
-    finish("Earning corrected — staff Pay and Revenue update immediately.");
-  };
-
-  // timeclock stores wall-clock times as timestamptz (e.g. 2026-07-28T10:00:00+00:00);
-  // accept "HH:MM" and rebuild the full timestamp on that date, or pass full values through.
-  const toClockTs=(val,date)=>{const v=String(val==null?"":val).trim();if(!v)return null;if(/^\d{1,2}:\d{2}$/.test(v))return `${date}T${v.padStart(5,"0")}:00+00:00`;return v;};
-  const clockHM=v=>v==null?"":(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(v))?String(v).slice(11,16):String(v));
-
-  const doClockFix=async()=>{
-    if(needReason())return;
-    setBusy(true);
-    const c=sel.row;
-    const before={date:c.date,clock_in:c.clock_in,clock_out:c.clock_out};
-    const after={date:form.date,clock_in:toClockTs(form.cin,form.date),clock_out:toClockTs(form.cout,form.date)};
-    const {error}=await db.from("timeclock").update(after,{eq:["id",c.id]});
-    if(error)return fail();
-    await logFix("EditTimeclock","timeclock",c.id,{employee:c.employee_name,before,after});
-    finish("Time entry corrected.");
-  };
-
-  const doClockAdd=async()=>{
-    if(needReason())return;
-    if(!form.emp){setErr("Choose the employee.");return;}
-    setBusy(true);
-    const d0=form.date||todayStr();
-    const er=emps.find(x=>x.name===form.emp);
-    const body={employee_id:er?er.id:null,employee_name:form.emp,date:d0,clock_in:toClockTs(form.cin,d0),clock_out:toClockTs(form.cout,d0)};
-    const {error}=await db.from("timeclock").insert(body);
-    if(error)return fail();
-    await logFix("AddTimeclock","timeclock","new",body);
-    finish("Missing time entry added.");
-  };
-
-  const doIssue=async()=>{
-    if(!issueMsg.trim()){setErr("Describe the issue first.");return;}
-    setBusy(true);
-    const {error}=await db.from("audit_log").insert({actor:user.nick||user.fn||user.email,actor_role:user.role,action:"IssueReport",target_table:"",target_id:"",reason:issueMsg.trim(),details:null});
-    if(error)return fail();
-    setIssueMsg("");setBusy(false);setErr("");
-    setOkMsg("Issue logged — the owner/manager will see it in Fix History.");setTimeout(()=>setOkMsg(""),6000);
-    loadAll();
-  };
-
-  // ── shared UI bits ──
-  const lbl={fontSize:10,color:MUTED,display:"block",marginBottom:3};
-  const reasonBox=(
-    <div style={{marginTop:10}}>
-      <label style={lbl}>Reason for this fix (required — saved to audit log)</label>
-      <textarea style={{...inpS,height:52}} placeholder="e.g. Cashier charged the wrong card amount — client refunded $45" value={reason} onChange={e=>setReason(e.target.value)}/>
-    </div>
-  );
-  const applyBtns=(onApply,label)=>(
-    <div style={{display:"flex",gap:8,marginTop:4}}>
-      <button style={{...btnP,opacity:busy?0.5:1}} disabled={busy} onClick={onApply}>{busy?"Saving…":label}</button>
-      <button style={btnO} onClick={closeSel}>Cancel</button>
-    </div>
-  );
-  const errBox=err&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:7,padding:"9px 12px",fontSize:11,color:"#A32D2D",marginBottom:10}}>{err}</div>;
-  const rowStyle=active=>({display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 10px",borderRadius:8,marginBottom:6,cursor:"pointer",border:`1px solid ${active?G:"rgba(0,0,0,0.08)"}`,background:active?"rgba(212,175,55,0.08)":"#fff",gap:8,flexWrap:"wrap"});
-  const statuses=["scheduled","confirmed","pending","in-service","completed","cancelled","no-show"];
-  const empSel=(val,onCh,anyLabel)=>(
-    <select style={inpS} value={val||""} onChange={onCh}>
-      <option value="">{anyLabel||"— select —"}</option>
-      {techs.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
-    </select>
-  );
-  const TABS=[["tx","Transactions / Refund"],["appt","Appointments"],["earn","Staff Earnings"],["clock","Timeclock"],["log","Fix History"]];
-
+// ─── NAIL ART GALLERY ─────────────────────────────────────────
+const ART_IMAGES=Array.from({length:50},(_,i)=>`/art/art-${String(i+1).padStart(2,"0")}.jpg`);
+function ArtGallery(){
+  const [view,setView]=useState(null); // index of open image
+  const close=()=>setView(null);
+  const step=d=>setView(v=>v===null?null:(v+d+ART_IMAGES.length)%ART_IMAGES.length);
+  useEffect(()=>{
+    if(view===null)return;
+    const onKey=e=>{if(e.key==="Escape")close();if(e.key==="ArrowRight")step(1);if(e.key==="ArrowLeft")step(-1);};
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[view]);
   return(
     <div>
-      <Ptitle t="Fix Center"/>
-      <div style={{fontSize:11,color:MUTED,marginBottom:12,lineHeight:1.6}}>Fix mistakes yourself — wrong charges, refunds, appointment changes, missed clock-ins, earnings on the wrong tech. Every fix requires a reason and is recorded in the audit log.</div>
-      {okMsg&&<div style={{background:"#EAF3DE",border:"0.5px solid #3B6D11",borderRadius:8,padding:"10px 14px",marginBottom:12,color:"#27500A",fontWeight:500,fontSize:12}}>{okMsg}</div>}
-      <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
-        {TABS.map(([id,l])=>(
-          <button key={id} onClick={()=>{setTab(id);closeSel();}} style={{padding:"6px 12px",borderRadius:6,fontSize:11,cursor:"pointer",border:"0.5px solid rgba(0,0,0,0.12)",fontFamily:"inherit",background:tab===id?G:"transparent",color:tab===id?"#fff":MUTED,fontWeight:tab===id?600:400}}>{l}</button>
+      <Ptitle t="Nail Art Gallery"/>
+      <div style={{fontSize:12,color:MUTED,marginTop:-8,marginBottom:16}}>Browse our looks & inspiration — tap any design to view it up close. Show your favorite at the front desk or when booking. ✨</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
+        {ART_IMAGES.map((src,i)=>(
+          <div key={src} onClick={()=>setView(i)} style={{position:"relative",borderRadius:14,overflow:"hidden",cursor:"pointer",aspectRatio:"2/3",background:"#EDE8E0",boxShadow:"0 1px 6px rgba(26,24,20,0.10)",border:"0.5px solid rgba(26,24,20,0.08)"}}>
+            <img src={src} alt={`Nail art design ${i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .25s"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="scale(1.045)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}/>
+            <div style={{position:"absolute",left:8,bottom:8,background:"rgba(26,24,20,0.55)",color:"#fff",fontSize:9,letterSpacing:"0.08em",padding:"3px 8px",borderRadius:20,backdropFilter:"blur(4px)"}}>№ {i+1}</div>
+          </div>
         ))}
       </div>
-
-      {tab==="tx"&&(
-        <div style={card}>
-          <Sec t="RECENT TRANSACTIONS — TAP ONE TO REFUND / VOID"/>
-          {txs.length===0&&<p style={{color:MUTED,fontSize:12}}>No transactions found.</p>}
-          {txs.map(t=>(
-            <div key={t.id}>
-              <div style={{...rowStyle(sel&&sel.kind==="tx"&&sel.row.id===t.id),cursor:parseFloat(t.total)<0?"default":"pointer",opacity:parseFloat(t.total)<0?0.6:1}} onClick={()=>{if(parseFloat(t.total)<0)return;pick("tx",t,{amount:Math.abs(parseFloat(t.total)||0).toFixed(2),revEarn:true,empId:t.employee_id||"",earnAmount:Math.abs(parseFloat(t.total)||0).toFixed(2),tipAmount:"0",date:dStrOf(t.created_at)});}}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600,color:parseFloat(t.total)<0?"#A32D2D":DARK}}>${parseFloat(t.total||0).toFixed(2)} · {t.payment_method||"—"}</div>
-                  <div style={{fontSize:10,color:MUTED}}>{(t.employees&&t.employees.name)||"no tech"} · <DateCell d={dStrOf(t.created_at)} t={hmOf(t.created_at)}/></div>
-                </div>
-                <span style={{fontSize:10,color:BRONZE}}>{parseFloat(t.total)<0?"refund entry":"Fix ▸"}</span>
-              </div>
-              {sel&&sel.kind==="tx"&&sel.row.id===t.id&&(
-                <div style={{...card,borderColor:G,marginBottom:10}}>
-                  <Sec t="REFUND / VOID THIS TRANSACTION"/>
-                  {errBox}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div><label style={lbl}>Refund amount ($) — full or partial</label>
-                    <input style={inpS} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/></div>
-                    <div><label style={lbl}>Payment was</label>
-                    <input style={{...inpS,background:"#f4f2ec"}} value={t.payment_method||"—"} readOnly/></div>
-                  </div>
-                  <label style={{fontSize:11,color:DARK,display:"flex",alignItems:"center",gap:6,marginBottom:8,cursor:"pointer"}}>
-                    <input type="checkbox" checked={!!form.revEarn} onChange={e=>setForm(f=>({...f,revEarn:e.target.checked}))}/>
-                    Also reverse the technician's earnings (fixes Pay + Revenue)
-                  </label>
-                  {form.revEarn&&(
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-                      <div><label style={lbl}>Technician</label>{empSel(form.empId,e=>setForm(f=>({...f,empId:e.target.value})))}</div>
-                      <div><label style={lbl}>Service amount ($)</label><input style={inpS} type="number" value={form.earnAmount} onChange={e=>setForm(f=>({...f,earnAmount:e.target.value}))}/></div>
-                      <div><label style={lbl}>Tip ($)</label><input style={inpS} type="number" value={form.tipAmount} onChange={e=>setForm(f=>({...f,tipAmount:e.target.value}))}/></div>
-                      <div><label style={lbl}>On date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-                    </div>
-                  )}
-                  {/card|helcim/i.test(t.payment_method||"")&&<div style={{background:"#FAEEDA",border:"0.5px solid #854F0B",borderRadius:7,padding:"8px 12px",fontSize:11,color:"#854F0B",marginBottom:8}}>Card payment: this records the refund in the system. Return the client's money on the <strong>Helcim dashboard / terminal</strong> manually.</div>}
-                  {reasonBox}
-                  {applyBtns(doRefund,"Record Refund")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab==="appt"&&(<>
-        <div style={card}>
-          <Sec t="APPOINTMENTS — TAP TO EDIT / RESCHEDULE / CANCEL"/>
-          {fAppts.length===0&&<p style={{color:MUTED,fontSize:12}}>No appointments found.</p>}
-          {fAppts.map(a=>(
-            <div key={a.id}>
-              <div style={rowStyle(sel&&sel.kind==="appt"&&sel.row.id===a.id)} onClick={()=>pick("appt",a,{d:dStrOf(a.scheduled_at),t:hmOf(a.scheduled_at),empId:a.employee_id||"",service:a.service||"",status:a.status||"scheduled"})}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600}}>{(a.clients&&a.clients.name)||a.notes||"Client"} · {a.service}</div>
-                  <div style={{fontSize:10,color:MUTED}}>{(a.employees&&a.employees.name)||"any tech"} · <DateCell d={dStrOf(a.scheduled_at)} t={hmOf(a.scheduled_at)}/> · <Pill status={a.status}/></div>
-                </div>
-                <span style={{fontSize:10,color:BRONZE}}>Fix ▸</span>
-              </div>
-              {sel&&sel.kind==="appt"&&sel.row.id===a.id&&(
-                <div style={{...card,borderColor:G,marginBottom:10}}>
-                  <Sec t="EDIT APPOINTMENT"/>
-                  {errBox}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                    <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.d} onChange={e=>setForm(f=>({...f,d:e.target.value}))}/></div>
-                    <div><label style={lbl}>Time</label><input style={inpS} type="time" value={form.t} onChange={e=>setForm(f=>({...f,t:e.target.value}))}/></div>
-                    <div><label style={lbl}>Status</label>
-                      <select style={inpS} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{statuses.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                    <div><label style={lbl}>Technician</label>{empSel(form.empId,e=>setForm(f=>({...f,empId:e.target.value})),"any tech")}</div>
-                    <div style={{gridColumn:"span 2"}}><label style={lbl}>Service</label><input style={inpS} value={form.service} onChange={e=>setForm(f=>({...f,service:e.target.value}))}/></div>
-                  </div>
-                  {reasonBox}
-                  {applyBtns(doApptFix,"Save Fix")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div style={card}>
-          <Sec t="WEBSITE / PORTAL BOOKING REQUESTS — TAP TO EDIT"/>
-          {fBooks.length===0&&<p style={{color:MUTED,fontSize:12}}>No booking requests found.</p>}
-          {fBooks.map(b=>(
-            <div key={b.id}>
-              <div style={rowStyle(sel&&sel.kind==="book"&&sel.row.id===b.id)} onClick={()=>pick("book",b,{d:b.appt_date||todayStr(),t:(b.appt_time||"09:00").slice(0,5),tech:b.technician||"",service:b.service_name||"",status:b.status||"pending"})}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600}}>{b.client_name} · {b.service_name}</div>
-                  <div style={{fontSize:10,color:MUTED}}>{b.technician||"any tech"} · <DateCell d={b.appt_date} t={(b.appt_time||"").slice(0,5)}/> · <Pill status={b.status}/> · {b.source}</div>
-                </div>
-                <span style={{fontSize:10,color:BRONZE}}>Fix ▸</span>
-              </div>
-              {sel&&sel.kind==="book"&&sel.row.id===b.id&&(
-                <div style={{...card,borderColor:G,marginBottom:10}}>
-                  <Sec t="EDIT BOOKING REQUEST"/>
-                  {errBox}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                    <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.d} onChange={e=>setForm(f=>({...f,d:e.target.value}))}/></div>
-                    <div><label style={lbl}>Time</label><input style={inpS} type="time" value={form.t} onChange={e=>setForm(f=>({...f,t:e.target.value}))}/></div>
-                    <div><label style={lbl}>Status</label>
-                      <select style={inpS} value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{Array.from(new Set(["pending","confirmed","completed","cancelled","past",form.status])).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                    <div><label style={lbl}>Technician (name)</label><input style={inpS} value={form.tech} onChange={e=>setForm(f=>({...f,tech:e.target.value}))}/></div>
-                    <div style={{gridColumn:"span 2"}}><label style={lbl}>Service</label><input style={inpS} value={form.service} onChange={e=>setForm(f=>({...f,service:e.target.value}))}/></div>
-                  </div>
-                  {reasonBox}
-                  {applyBtns(doBookFix,"Save Fix")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </>)}
-
-      {tab==="earn"&&(
-        <div style={card}>
-          <Sec t="STAFF EARNINGS — TAP TO REASSIGN / ADJUST"/>
-          <div style={{fontSize:10,color:MUTED,marginBottom:8}}>Wrong tech got the credit? Wrong amount? Fix it here — Pay tab and Revenue KPI update immediately.</div>
-          {earns.length===0&&<p style={{color:MUTED,fontSize:12}}>No earnings found.</p>}
-          {earns.map(e0=>(
-            <div key={e0.id}>
-              <div style={rowStyle(sel&&sel.kind==="earn"&&sel.row.id===e0.id)} onClick={()=>pick("earn",e0,{empId:e0.employee_id||"",amount:e0.amount,tip:e0.tip,date:e0.earned_date,service:e0.service_name||""})}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600,color:parseFloat(e0.amount)<0?"#A32D2D":DARK}}>{(e0.employees&&e0.employees.name)||"?"} · ${parseFloat(e0.amount||0).toFixed(2)} + ${parseFloat(e0.tip||0).toFixed(2)} tip</div>
-                  <div style={{fontSize:10,color:MUTED}}>{e0.service_name} · <DateCell d={e0.earned_date}/> · {e0.source}</div>
-                </div>
-                <span style={{fontSize:10,color:BRONZE}}>Fix ▸</span>
-              </div>
-              {sel&&sel.kind==="earn"&&sel.row.id===e0.id&&(
-                <div style={{...card,borderColor:G,marginBottom:10}}>
-                  <Sec t="CORRECT THIS EARNING"/>
-                  {errBox}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-                    <div><label style={lbl}>Technician</label>{empSel(form.empId,e=>setForm(f=>({...f,empId:e.target.value})))}</div>
-                    <div><label style={lbl}>Amount ($)</label><input style={inpS} type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/></div>
-                    <div><label style={lbl}>Tip ($)</label><input style={inpS} type="number" value={form.tip} onChange={e=>setForm(f=>({...f,tip:e.target.value}))}/></div>
-                    <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-                    <div style={{gridColumn:"span 2"}}><label style={lbl}>Service label</label><input style={inpS} value={form.service} onChange={e=>setForm(f=>({...f,service:e.target.value}))}/></div>
-                  </div>
-                  {reasonBox}
-                  {applyBtns(doEarnFix,"Save Fix")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab==="clock"&&(<>
-        <div style={{...card,borderColor:"rgba(212,175,55,0.4)"}}>
-          <Sec t="ADD A MISSED CLOCK ENTRY"/>
-          {sel&&sel.kind==="clockadd"&&errBox}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-            <div><label style={lbl}>Employee</label>
-              <select style={inpS} value={(sel&&sel.kind==="clockadd"&&form.emp)||""} onChange={e=>{if(!(sel&&sel.kind==="clockadd"))pick("clockadd",{},{emp:e.target.value,date:todayStr(),cin:"",cout:""});else setForm(f=>({...f,emp:e.target.value}));}}>
-                <option value="">— select —</option>
-                {emps.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
-              </select></div>
-            {sel&&sel.kind==="clockadd"&&(<>
-              <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-              <div><label style={lbl}>Clock in (HH:MM, e.g. 09:00)</label><input style={inpS} placeholder="09:00" value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
-              <div><label style={lbl}>Clock out (HH:MM)</label><input style={inpS} placeholder="18:30" value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
-            </>)}
+      {view!==null&&(
+        <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(26,24,20,0.94)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:16}}>
+          <img src={ART_IMAGES[view]} alt={`Nail art design ${view+1}`} onClick={e=>{e.stopPropagation();step(1);}}
+            style={{maxWidth:"92vw",maxHeight:"78vh",borderRadius:14,border:`1px solid ${G}`,boxShadow:"0 8px 40px rgba(0,0,0,0.5)",objectFit:"contain",cursor:"pointer"}}/>
+          <div style={{display:"flex",alignItems:"center",gap:18,marginTop:16}} onClick={e=>e.stopPropagation()}>
+            <button onClick={()=>step(-1)} style={{background:"rgba(255,255,255,0.10)",border:`1px solid rgba(212,175,55,0.5)`,color:G,borderRadius:999,width:44,height:44,fontSize:18,cursor:"pointer"}}>‹</button>
+            <div style={{color:"#fff",fontSize:12,letterSpacing:"0.15em",fontFamily:"Georgia,serif"}}>{view+1} <span style={{color:MUTED}}>/ {ART_IMAGES.length}</span></div>
+            <button onClick={()=>step(1)} style={{background:"rgba(255,255,255,0.10)",border:`1px solid rgba(212,175,55,0.5)`,color:G,borderRadius:999,width:44,height:44,fontSize:18,cursor:"pointer"}}>›</button>
           </div>
-          {sel&&sel.kind==="clockadd"&&(<>{reasonBox}{applyBtns(doClockAdd,"Add Entry")}</>)}
+          <button onClick={close} style={{position:"fixed",top:"max(14px, env(safe-area-inset-top))",right:16,background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:999,width:40,height:40,fontSize:16,cursor:"pointer"}}>✕</button>
         </div>
-        <div style={card}>
-          <Sec t="RECENT TIME ENTRIES — TAP TO CORRECT"/>
-          {clocks.length===0&&<p style={{color:MUTED,fontSize:12}}>No time entries found.</p>}
-          {clocks.map(c=>(
-            <div key={c.id}>
-              <div style={rowStyle(sel&&sel.kind==="clock"&&sel.row.id===c.id)} onClick={()=>pick("clock",c,{date:c.date,cin:clockHM(c.clock_in),cout:clockHM(c.clock_out)})}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600}}>{c.employee_name}</div>
-                  <div style={{fontSize:10,color:MUTED}}><DateCell d={c.date}/> · in: {c.clock_in==null?"—":fmt12(clockHM(c.clock_in))} · out: {c.clock_out==null?"— (still clocked in)":fmt12(clockHM(c.clock_out))}</div>
-                </div>
-                <span style={{fontSize:10,color:BRONZE}}>Fix ▸</span>
-              </div>
-              {sel&&sel.kind==="clock"&&sel.row.id===c.id&&(
-                <div style={{...card,borderColor:G,marginBottom:10}}>
-                  <Sec t="CORRECT TIME ENTRY"/>
-                  {errBox}
-                  <div style={{fontSize:10,color:MUTED,marginBottom:8}}>Times are HH:MM (24-hour, e.g. 09:00 / 18:30). Leave clock-out empty to keep the employee clocked in.</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                    <div><label style={lbl}>Date</label><input style={inpS} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-                    <div><label style={lbl}>Clock in</label><input style={inpS} placeholder="09:00" value={form.cin} onChange={e=>setForm(f=>({...f,cin:e.target.value}))}/></div>
-                    <div><label style={lbl}>Clock out</label><input style={inpS} placeholder="18:30" value={form.cout} onChange={e=>setForm(f=>({...f,cout:e.target.value}))}/></div>
-                  </div>
-                  {reasonBox}
-                  {applyBtns(doClockFix,"Save Fix")}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </>)}
-
-      {tab==="log"&&(<>
-        <div style={{...card,borderColor:"rgba(212,175,55,0.4)"}}>
-          <Sec t="SOMETHING ELSE WRONG? REPORT IT"/>
-          {sel==null&&errBox}
-          <div style={{fontSize:10,color:MUTED,marginBottom:6}}>Any error not covered by the tabs above — describe it here. It is logged for the owner/manager to act on.</div>
-          <textarea style={{...inpS,height:56}} placeholder="Describe the problem…" value={issueMsg} onChange={e=>setIssueMsg(e.target.value)}/>
-          <button style={{...btnP,opacity:busy?0.5:1}} disabled={busy} onClick={doIssue}>Log Issue</button>
-        </div>
-        <div style={card}>
-          <Sec t="FIX HISTORY — WHO FIXED WHAT, WHEN, WHY"/>
-          {logs.length===0&&<p style={{color:MUTED,fontSize:12}}>No fixes recorded yet.</p>}
-          {logs.length>0&&(
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-              <thead><tr style={{borderBottom:"0.5px solid rgba(0,0,0,0.07)"}}>{["Time","By","Action","Target","Reason"].map(h=><th key={h} style={{textAlign:"left",padding:"5px 8px",color:MUTED,fontSize:10,fontWeight:500}}>{h}</th>)}</tr></thead>
-              <tbody>{logs.map(l=>(
-                <tr key={l.id} style={{borderBottom:"0.5px solid rgba(0,0,0,0.04)"}}>
-                  <td style={{padding:"7px 8px",color:MUTED,fontSize:10}}><DateCell d={dStrOf(l.created_at)} t={hmOf(l.created_at)}/></td>
-                  <td style={{padding:"7px 8px",fontWeight:500}}>{l.actor}<div style={{fontSize:9,color:MUTED}}>{l.actor_role}</div></td>
-                  <td style={{padding:"7px 8px"}}><span style={{...pill(l.action,l.action==="Refund"?"#185FA5":l.action==="IssueReport"?"#A32D2D":"#854F0B",l.action==="Refund"?"#E6F1FB":l.action==="IssueReport"?"#FCEBEB":"#FAEEDA")}}>{l.action}</span></td>
-                  <td style={{padding:"7px 8px",color:MUTED,fontSize:10}}>{l.target_table}{l.target_id?` #${l.target_id}`:""}</td>
-                  <td style={{padding:"7px 8px",fontSize:11}}>{l.reason}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          )}
-        </div>
-      </>)}
+      )}
     </div>
   );
 }
@@ -2407,6 +2059,7 @@ export default function App(){
     frontdesk:  <FrontDeskPage user={user}/>,
     client_home:<ClientHome user={user}/>,
     client_book:<ClientBook user={user} go={()=>setPage("client_home")}/>,
+    art:        <ArtGallery/>,
     revenue:    <RevenuePage/>,
     schedule:   <SchedulePage/>,
     employees:  <EmployeesPage/>,
@@ -2417,7 +2070,6 @@ export default function App(){
     reports:    <ReportsPage/>,
     feedback:   <FeedbackPage/>,
     audit:      <AuditPage/>,
-    fixcenter:  <FixCenterPage user={user}/>,
     safety:     <SafetyPage/>,
     giftcards:  <GiftCardsPage/>,
     queue:      <QueuePage user={user}/>,
