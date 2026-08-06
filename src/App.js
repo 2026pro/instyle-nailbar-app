@@ -182,7 +182,7 @@ const db={
 
 // ─── STYLE TOKENS ─────────────────────────────────────────────
 const NAV={
-  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Employees",s:"Staff"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
+  Owner:   [{id:"dash",l:"Dashboard",s:"Home"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"revenue",l:"Revenue",s:"Revenue"},{id:"schedule",l:"All Schedules",s:"Schedule"},{id:"employees",l:"Nail Artists",s:"Artists"},{id:"clients",l:"Clients",s:"Clients"},{id:"appts",l:"Appointments",s:"Appts"},{id:"pos",l:"POS Checkout",s:"POS"},{id:"payroll",l:"Payroll",s:"Payroll"},{id:"reports",l:"Reports",s:"Reports"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"audit",l:"Audit Log",s:"Audit"},{id:"safety",l:"Safety / SDS",s:"Safety"},{id:"giftcards",l:"Gift Cards",s:"Gifts"}],
   Manager: [{id:"staff",l:"Staff Overview",s:"Staff"},{id:"frontdesk",l:"Front Desk",s:"Desk"},{id:"queue",l:"Employee Queue",s:"Queue"},{id:"schedule",l:"Schedules",s:"Schedule"},{id:"appts",l:"Appointments",s:"Appts"},{id:"feedback",l:"Feedback",s:"Feedback"},{id:"leave",l:"Leave Requests",s:"Leave"},{id:"reports",l:"Reports",s:"Reports"},{id:"audit",l:"Audit Log",s:"Audit"}],
   Employee:[{id:"my_dash",l:"My Dashboard",s:"Home"},{id:"my_sched",l:"My Schedule",s:"Schedule"},{id:"my_queue",l:"My Queue Position",s:"Queue"},{id:"my_fb",l:"My Feedback",s:"Feedback"},{id:"my_leave",l:"Request Leave",s:"Leave"},{id:"my_imp",l:"Suggest Improvement",s:"Suggest"}],
 
@@ -1178,7 +1178,7 @@ function EmployeesPage(){
   const [sel,setSel]=useState(null);
   return(
     <div>
-      <Ptitle t="Employees"/>
+      <Ptitle t="Nail Artists"/>
       {sel&&(
         <div style={{...card,borderColor:"rgba(212,175,55,0.4)",marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -1187,13 +1187,18 @@ function EmployeesPage(){
               <div>
                 <div style={{fontSize:15,fontWeight:500}}>{sel.fn}</div>
                 <div style={{color:MUTED,fontSize:11,marginTop:2}}>{sel.ph}</div>
-                <div style={{marginTop:5}}><span style={{...pill(sel.role,sel.role==="Owner"?"#3C3489":sel.role==="Manager"?"#854F0B":"#3B6D11",sel.role==="Owner"?"#EEEDFE":sel.role==="Manager"?"#FAEEDA":"#EAF3DE")}}>{sel.role}</span></div>
+                <div style={{marginTop:5,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{...pill(sel.role==="Employee"?"Nail Artist":sel.role,sel.role==="Owner"?"#3C3489":sel.role==="Manager"?"#854F0B":"#3B6D11",sel.role==="Owner"?"#EEEDFE":sel.role==="Manager"?"#FAEEDA":"#EAF3DE")}}>{sel.role==="Employee"?"Nail Artist":sel.role}</span>
+                  {sel.role==="Employee"&&<a href={`https://www.instagram.com/${artistStats(sel.fn).ig}/`} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:4,color:"#C13584",fontSize:11,textDecoration:"none",fontWeight:600}}><IGIcon size={13}/>@{artistStats(sel.fn).ig}</a>}
+                </div>
               </div>
             </div>
             <button style={{...btnO,fontSize:11}} onClick={()=>setSel(null)}>Close</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:12}}>
-            {[{l:"Today Sales",v:`$${sel.sales}`},{l:"Today Tips",v:`$${sel.tips}`},{l:"Schedule",v:sel.sch.join(", ")},{l:"Today Tickets",v:TX.filter(t=>t.e===sel.nick&&t.d==="2026-05-31").length}].map((s,i)=>(
+            {(sel.role==="Employee"
+              ?[{l:"Today Sales",v:`$${sel.sales}`},{l:"Rating",v:`★ ${artistStats(sel.fn).rating}`},{l:"Starting Rate",v:`$${artistStats(sel.fn).rate}/hr`},{l:"Status",v:artistStats(sel.fn).demand}]
+              :[{l:"Today Sales",v:`$${sel.sales}`},{l:"Today Tips",v:`$${sel.tips}`},{l:"Schedule",v:sel.sch.join(", ")},{l:"Today Tickets",v:TX.filter(t=>t.e===sel.nick&&t.d==="2026-05-31").length}]).map((s,i)=>(
               <div key={i} style={{background:IVORY,borderRadius:7,padding:"10px 12px"}}>
                 <div style={{fontSize:10,color:MUTED}}>{s.l}</div>
                 <div style={{fontSize:13,fontWeight:400,color:DARK,marginTop:3}}>{s.v}</div>
@@ -1211,7 +1216,7 @@ function EmployeesPage(){
               <td style={{padding:"9px 8px",fontWeight:500}}>{u.fn}</td>
               <td style={{padding:"9px 8px",color:MUTED}}>{u.nick}</td>
               <td style={{padding:"9px 8px"}}>{u.ph}</td>
-              <td style={{padding:"9px 8px"}}><span style={{...pill(u.role,u.role==="Owner"?"#3C3489":u.role==="Manager"?"#854F0B":"#3B6D11",u.role==="Owner"?"#EEEDFE":u.role==="Manager"?"#FAEEDA":"#EAF3DE")}}>{u.role}</span></td>
+              <td style={{padding:"9px 8px"}}><span style={{...pill(u.role==="Employee"?"Nail Artist":u.role,u.role==="Owner"?"#3C3489":u.role==="Manager"?"#854F0B":"#3B6D11",u.role==="Owner"?"#EEEDFE":u.role==="Manager"?"#FAEEDA":"#EAF3DE")}}>{u.role==="Employee"?"Nail Artist":u.role}</span></td>
               <td style={{padding:"9px 8px",color:G,fontWeight:600}}>${u.sales}</td>
               <td style={{padding:"9px 8px",fontSize:10,color:MUTED}}>{u.sch.join(", ")}</td>
             </tr>
@@ -1894,6 +1899,7 @@ function ClientBook({user,go}){
   const [svc,setSvc]=useState(null);
   const [d,setD]=useState(todayStr());
   const [t,setT]=useState("10:00");
+  const [reel,setReel]=useState(false);
   const [ok,setOk]=useState(null);
   const [err,setErr]=useState("");
   const [saving,setSaving]=useState(false);
@@ -1904,11 +1910,12 @@ function ClientBook({user,go}){
     if(!svc){setErr("Please choose a service.");return;}
     if(!d||d<todayStr()){setErr("Please choose a date from today onward.");return;}
     setSaving(true);setErr("");
-    const {error}=await db.from("booking_requests").insert({client_name:user.fn,client_phone:user.phone||"",client_email:(user.email||"").toLowerCase(),service_name:svc.name,service_id:svc.id||null,appt_date:d,appt_time:t+":00",status:"pending",source:"portal"});
+    const svcName=svc.name+(reel?" + 🎬 Reel":"");
+    const {error}=await db.from("booking_requests").insert({client_name:user.fn,client_phone:user.phone||"",client_email:(user.email||"").toLowerCase(),service_name:svcName,service_id:svc.id||null,appt_date:d,appt_time:t+":00",status:"pending",source:"portal"});
     setSaving(false);
     if(error){setErr("Could not send your booking — please try again.");return;}
-    notifyBooking({email:user.email,name:user.fn,service:svc.name,date:d,time:t,durMin:svc.duration||60});
-    setOk({svc:svc.name,d,t});
+    notifyBooking({email:user.email,name:user.fn,service:svcName,date:d,time:t,durMin:(svc.duration||60)+(reel?15:0)});
+    setOk({svc:svcName,d,t});
   };
 
   if(ok) return(
@@ -1939,6 +1946,15 @@ function ClientBook({user,go}){
           {prods.length===0&&<span style={{fontSize:11,color:MUTED}}>Loading services…</span>}
         </div>
       </div>
+      <div style={{...card,border:`1px solid ${reel?"#C13584":"rgba(0,0,0,0.08)"}`,background:reel?"#FDF3F9":"#fff",cursor:"pointer"}} onClick={()=>setReel(r=>!r)}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:22,height:22,borderRadius:6,border:`1.5px solid ${reel?"#C13584":"rgba(0,0,0,0.25)"}`,background:reel?"#C13584":"#fff",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{reel?"✓":""}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:600,color:DARK}}>🎬 Make a Reel with your Nail Artist <span style={{fontSize:10,color:"#C13584",fontWeight:600,marginLeft:4}}>+15 MIN · FREE</span></div>
+            <div style={{fontSize:11,color:MUTED,marginTop:3,lineHeight:1.5}}>Be the star — we film a short Reel of your fresh nails together and you both get to post it. Tag us & your artist on Instagram! 📸</div>
+          </div>
+        </div>
+      </div>
       <div style={card}>
         <Sec t="2 · PICK DATE & TIME"/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -1958,38 +1974,115 @@ function ClientBook({user,go}){
   );
 }
 
-// ─── NAIL ART GALLERY ─────────────────────────────────────────
+// ─── NAIL ART GALLERY + NAIL ARTIST PROFILES ─────────────────
 const ART_IMAGES=Array.from({length:50},(_,i)=>`/art/art-${String(i+1).padStart(2,"0")}.jpg`);
+const FALLBACK_ARTISTS=[{name:"Linh Tran",role:"Nail Technician"},{name:"Mai Nguyen",role:"Nail Technician"},{name:"Ashley Johnson",role:"Senior Nail Artist"}];
+const aseed=n=>{let h=0;for(const c of String(n))h=(h*31+c.charCodeAt(0))%997;return h;};
+const artistStats=n=>{const h=aseed(n);return{rating:(4.7+(h%3)/10).toFixed(1),rate:45+5*(h%9),demand:["🔥 High demand","⭐ Client favorite","🚀 Rising star"][h%3],ig:"instyle."+String(n).split(" ")[0].toLowerCase().replace(/[^a-z]/g,"")};};
+const IGIcon=({size=15,color="currentColor"})=>(
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}>
+    <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill={color} stroke="none"/>
+  </svg>
+);
+const ArtistDot=({name,size=22})=>(
+  <div style={{width:size,height:size,borderRadius:"50%",background:DARK,border:`1px solid ${G}`,color:G,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.36,fontFamily:"Georgia,serif",flexShrink:0}}>
+    {String(name).split(" ").map(w=>w[0]).slice(0,2).join("")}
+  </div>
+);
 function ArtGallery(){
-  const [view,setView]=useState(null); // index of open image
+  const [techs,setTechs]=useState(FALLBACK_ARTISTS);
+  const [artist,setArtist]=useState(null); // selected artist object {name,role,ix}
+  const [view,setView]=useState(null);     // position within `visible`
+  useEffect(()=>{db.from("employees").select("*").then(({data})=>{
+    const t=(data||[]).filter(e=>e.status!=="inactive"&&isTechRole(e.role));
+    if(t.length)setTechs(t.map(e=>({name:e.name,role:e.role||"Nail Artist"})));
+  });},[]);
+  const artistOf=i=>({...techs[i%techs.length],ix:i%techs.length});
+  const visible=ART_IMAGES.map((src,i)=>({src,i})).filter(o=>!artist||o.i%techs.length===artist.ix);
   const close=()=>setView(null);
-  const step=d=>setView(v=>v===null?null:(v+d+ART_IMAGES.length)%ART_IMAGES.length);
+  const step=d=>setView(v=>v===null?null:(v+d+visible.length)%visible.length);
   useEffect(()=>{
     if(view===null)return;
     const onKey=e=>{if(e.key==="Escape")close();if(e.key==="ArrowRight")step(1);if(e.key==="ArrowLeft")step(-1);};
     window.addEventListener("keydown",onKey);
     return()=>window.removeEventListener("keydown",onKey);
-  },[view]);
+  },[view,visible.length]);
+  const openArtist=a=>{setArtist(a);setView(null);window.scrollTo({top:0});};
+  const st=artist?artistStats(artist.name):null;
+  const prettyRole=r=>/technician/i.test(r||"")?"Nail Artist":(r||"Nail Artist");
   return(
     <div>
-      <Ptitle t="Nail Art Gallery"/>
-      <div style={{fontSize:12,color:MUTED,marginTop:-8,marginBottom:16}}>Browse our looks & inspiration — tap any design to view it up close. Show your favorite at the front desk or when booking. ✨</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
-        {ART_IMAGES.map((src,i)=>(
-          <div key={src} onClick={()=>setView(i)} style={{position:"relative",borderRadius:14,overflow:"hidden",cursor:"pointer",aspectRatio:"2/3",background:"#EDE8E0",boxShadow:"0 1px 6px rgba(26,24,20,0.10)",border:"0.5px solid rgba(26,24,20,0.08)"}}>
-            <img src={src} alt={`Nail art design ${i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .25s"}}
-              onMouseEnter={e=>e.currentTarget.style.transform="scale(1.045)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}/>
-            <div style={{position:"absolute",left:8,bottom:8,background:"rgba(26,24,20,0.55)",color:"#fff",fontSize:9,letterSpacing:"0.08em",padding:"3px 8px",borderRadius:20,backdropFilter:"blur(4px)"}}>№ {i+1}</div>
+      {!artist&&<>
+        <Ptitle t="Nail Art Gallery"/>
+        <div style={{fontSize:12,color:MUTED,marginTop:-8,marginBottom:16}}>Every design is by one of our Nail Artists — tap a look to view it, or tap the artist to see their profile & portfolio. ✨</div>
+      </>}
+      {artist&&(
+        <div>
+          <button style={{...btnO,fontSize:11,marginBottom:14}} onClick={()=>{setArtist(null);setView(null);}}>← All designs</button>
+          <div style={{...card,borderColor:"rgba(212,175,55,0.45)",marginBottom:14}}>
+            <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+              <ArtistDot name={artist.name} size={62}/>
+              <div style={{flex:1,minWidth:160}}>
+                <div style={{fontSize:18,fontFamily:"Georgia,serif",color:DARK}}>{artist.name}</div>
+                <div style={{fontSize:11,color:BRONZE,letterSpacing:"0.12em",textTransform:"uppercase",marginTop:2}}>{prettyRole(artist.role)}</div>
+                <a href={`https://www.instagram.com/${st.ig}/`} target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:8,color:"#C13584",fontSize:12,textDecoration:"none",fontWeight:600}}>
+                  <IGIcon size={16}/>@{st.ig}
+                </a>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginTop:14}}>
+              {[{l:"RATING",v:`★ ${st.rating}`},{l:"STARTING RATE",v:`$${st.rate}/hr`},{l:"STATUS",v:st.demand},{l:"REELS",v:"🎬 Film together"}].map((s,ix)=>(
+                <div key={ix} style={{background:IVORY,borderRadius:8,padding:"9px 11px"}}>
+                  <div style={{fontSize:9,color:MUTED,letterSpacing:"0.1em"}}>{s.l}</div>
+                  <div style={{fontSize:12.5,color:DARK,marginTop:3,fontWeight:600}}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:11,color:MUTED,marginTop:12,lineHeight:1.6}}>Love a look below? Mention it when you book — and ask about filming a <b>Reel</b> together at your appointment. Tag <span style={{color:"#C13584",fontWeight:600}}>@{st.ig}</span> when you post! 💅</div>
           </div>
-        ))}
+          <div style={{fontSize:11,color:MUTED,letterSpacing:"0.12em",marginBottom:10}}>PORTFOLIO — {visible.length} DESIGNS</div>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12}}>
+        {visible.map((o,pos)=>{
+          const a=artistOf(o.i);
+          return(
+            <div key={o.src} style={{borderRadius:14,overflow:"hidden",background:"#fff",boxShadow:"0 1px 6px rgba(26,24,20,0.10)",border:"0.5px solid rgba(26,24,20,0.08)"}}>
+              <div onClick={()=>setView(pos)} style={{position:"relative",cursor:"pointer",aspectRatio:"2/3",background:"#EDE8E0"}}>
+                <img src={o.src} alt={`Nail art design ${o.i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .25s"}}
+                  onMouseEnter={e=>e.currentTarget.style.transform="scale(1.045)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}/>
+                <div style={{position:"absolute",left:8,bottom:8,background:"rgba(26,24,20,0.55)",color:"#fff",fontSize:9,letterSpacing:"0.08em",padding:"3px 8px",borderRadius:20,backdropFilter:"blur(4px)"}}>№ {o.i+1}</div>
+              </div>
+              {!artist&&(
+                <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 9px"}}>
+                  <div onClick={()=>openArtist(a)} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",flex:1,minWidth:0}}>
+                    <ArtistDot name={a.name}/>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:10.5,fontWeight:600,color:DARK,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.name}</div>
+                      <div style={{fontSize:8.5,color:MUTED,letterSpacing:"0.06em"}}>NAIL ARTIST</div>
+                    </div>
+                  </div>
+                  <a href={`https://www.instagram.com/${artistStats(a.name).ig}/`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"#C13584",padding:4,flexShrink:0}} aria-label={`${a.name} on Instagram`}>
+                    <IGIcon size={15}/>
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      {view!==null&&(
+      {view!==null&&visible[view]&&(
         <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(26,24,20,0.94)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:16}}>
-          <img src={ART_IMAGES[view]} alt={`Nail art design ${view+1}`} onClick={e=>{e.stopPropagation();step(1);}}
-            style={{maxWidth:"92vw",maxHeight:"78vh",borderRadius:14,border:`1px solid ${G}`,boxShadow:"0 8px 40px rgba(0,0,0,0.5)",objectFit:"contain",cursor:"pointer"}}/>
-          <div style={{display:"flex",alignItems:"center",gap:18,marginTop:16}} onClick={e=>e.stopPropagation()}>
+          <img src={visible[view].src} alt={`Nail art design ${visible[view].i+1}`} onClick={e=>{e.stopPropagation();step(1);}}
+            style={{maxWidth:"92vw",maxHeight:"72vh",borderRadius:14,border:`1px solid ${G}`,boxShadow:"0 8px 40px rgba(0,0,0,0.5)",objectFit:"contain",cursor:"pointer"}}/>
+          <div onClick={e=>{e.stopPropagation();openArtist(artistOf(visible[view].i));}} style={{display:"flex",alignItems:"center",gap:8,marginTop:12,cursor:"pointer",background:"rgba(255,255,255,0.08)",padding:"7px 14px",borderRadius:999}}>
+            <ArtistDot name={artistOf(visible[view].i).name} size={24}/>
+            <span style={{color:"#fff",fontSize:12}}>{artistOf(visible[view].i).name}</span>
+            <span style={{color:"#C13584"}}><IGIcon size={13}/></span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:18,marginTop:12}} onClick={e=>e.stopPropagation()}>
             <button onClick={()=>step(-1)} style={{background:"rgba(255,255,255,0.10)",border:`1px solid rgba(212,175,55,0.5)`,color:G,borderRadius:999,width:44,height:44,fontSize:18,cursor:"pointer"}}>‹</button>
-            <div style={{color:"#fff",fontSize:12,letterSpacing:"0.15em",fontFamily:"Georgia,serif"}}>{view+1} <span style={{color:MUTED}}>/ {ART_IMAGES.length}</span></div>
+            <div style={{color:"#fff",fontSize:12,letterSpacing:"0.15em",fontFamily:"Georgia,serif"}}>{view+1} <span style={{color:MUTED}}>/ {visible.length}</span></div>
             <button onClick={()=>step(1)} style={{background:"rgba(255,255,255,0.10)",border:`1px solid rgba(212,175,55,0.5)`,color:G,borderRadius:999,width:44,height:44,fontSize:18,cursor:"pointer"}}>›</button>
           </div>
           <button onClick={close} style={{position:"fixed",top:"max(14px, env(safe-area-inset-top))",right:16,background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:999,width:40,height:40,fontSize:16,cursor:"pointer"}}>✕</button>
